@@ -87,7 +87,7 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     # Define the checks to be done as well as their related pillars and weight
-    $storagecontrols = @(
+    $StorageControls = @(
         "Turn on Soft Delete for Blob Data;Reliability,Security,Operational Excellence;70"
         "Use Microsoft Entra ID to authorize access to blob data;Reliability,Security,Operational Excellence;70"
         "Use blob versioning or immutable blobs to store business-critical data;Reliability,Security,Operational Excellence;75"
@@ -255,7 +255,7 @@ foreach ($sub in $AllSubscriptions) {
         ## Cost Optimization ##
 
         # Consider cost savings by reserving data capacity for block blob storage.
-        ## Can not be checked programmatically. Do we even want to check for this?
+        ## This requires access to the container where the blob is stored, requiring a connection string, storage account key or SAS token.
 
         # Organize data into access tiers.
         if ($strg.accessTier -match 'Hot') {
@@ -339,14 +339,117 @@ foreach ($sub in $AllSubscriptions) {
 
     ################# Region Key Vaults #####################
 
-    $vaultcontrols = @(
-        
+    try {
+        $Keyvaults = az keyvault list 2> $null | ConvertFrom-Json -Depth 10
+    }
+    catch {
+        Write-Error "Unable to retrieve storage accounts for subscription $($sub.name)." -ErrorAction Continue
+    }
+
+    $KeyvaultControls = @(
+        "Check for presence of AppName tag;Custom;90"
+        "Check for presence of CI tag;Custom;90"
+        "Check for presence of CIA tag;Custom;90"
+        "Check for Key Vault Full Administrator Permissions;Custom;75"
     )
 
     $VaultResults = @()
-    $VaultResults += "###########################################"
-    $VaultResults += "WAF Assessment Results for Storage Accounts"
-    $VaultResults += "###########################################"
+    $VaultResults += "#####################################"
+    $VaultResults += "WAF Assessment Results for Key Vaults"
+    $VaultResults += "#####################################"
+
+    # Note: There are no controls described for Key Vaults in the Microsoft WAF documentation.
+    # We will primarily be using the Conformity checks, as well as IT Guardrail checks.
+    
+    foreach ($keyvault in $Keyvaults) {
+
+        $VaultResults += ""
+        $VaultResults += "Key Vault - $($keyvault.name)"
+        $VaultResults += ""
+
+        # Check for presence of AppName tag
+        if ($keyvault.tags.AppName) {
+            $VaultResults += "Good: AppName tag is present on Key Vault $($keyvault.name)"
+        }
+        else {
+            $VaultResults += "Bad: AppName tag is NOT present on Key Vault $($keyvault.name)"
+        }
+
+        # Check for presence of CI tag
+        if ($keyvault.tags.'Business Application CI') {
+            $VaultResults += "Good: Application CI tag is present on Key Vault $($keyvault.name)"
+        }
+        else {
+            $VaultResults += "Bad: Application CI tag is NOT present on Key Vault $($keyvault.name)"
+        }
+
+        # Check for presence of CIA tag
+        if ($keyvault.tags.CIA) {
+            $VaultResults += "Good: CIA tag is present on Key Vault $($keyvault.name)"
+        }
+        else {
+            $VaultResults += "Bad: CIA tag is NOT present on Key Vault $($keyvault.name)"
+        }
+
+        # Check for Key Vault Full Administrator Permissions
+        $perms = az keyvault show --name $keyvault.name --query 'properties.accessPolicies[*].{"PrincipalId":objectId, "permissions":permissions}' | ConvertFrom-Json -Depth 10
+        if ('All' -in $perms.permissions.certificates -or 'All' -in $perms.permissions.keys -or 'All' -in $perms.permissions.secrets -or 'All' -in $perms.permissions.storage) {
+            $VaultResults += "Bad: Full access permissions found on keyvault $($keyvault.name):"
+            foreach ($perm in $perms) {
+                if ('All' -in $perm.permissions.certificates -or 'All' -in $perm.permissions.keys -or 'All' -in $perm.permissions.secrets -or 'All' -in $perm.permissions.storage) {
+                    $VaultResults += "Principal with ID $($perm.PrincipalId) has Full Access on one or all of Certificates/Keys/Secrets/Storage."
+                }
+            }
+        }
+        else {
+            $VaultResults += "Good: No Full Access permissions found on keyvault $($keyvault.name)"
+        }
+
+        # Audit event logging should be active for Azure Key Vault
+        $diag = az monitor diagnostic-settings list --resource $keyvault.name --query '[*].logs | []' | ConvertFrom-Json -Depth 10
+        if (($diag | Where-Object {$_.category -eq 'AuditEvent'}).enabled -eq $True) {
+            $VaultResults += "Good: Audit Events are logged for keyvault $($keyvault.name)."
+        }
+        else {
+            $VaultResults += "Bad: Audit Events are NOT logged for keyvault $($keyvault.name)."
+        }
+
+        # Purge Protection should be enabled for Azure Key Vault
+        $vaultsettings = az keyvault show --name $keyvault.name | ConvertFrom-Json -Depth 10
+        if ($vaultsettings.properties.enablePurgeProtection -eq 'True') {
+            $VaultResults += "Good: Purge Protection is enabled for keyvault $($keyvault.name)"
+        }
+        else {
+            $VaultResults += "Bad: Purge Protection is NOT enabled for keyvault $($keyvault.name)"
+        }
+
+        # Soft Delete should be enabled for Azure Key Vault
+        if ($vaultsettings.properties.enableSoftDelete -eq 'True') {
+            $VaultResults += "Good: Soft Delete is enabled for keyvault $($keyvault.name)"
+        }
+        else {
+            $VaultResults += "Bad: Soft Delete is NOT enabled for keyvault $($keyvault.name)"
+        }
+
+        # Allow trusted Microsoft services to access the Key Vault
+        if ($vaultsettings.properties.networkAcls.bypass -match 'AzureServices') {
+            $VaultResults += "Good: Microsoft Azure services are whitelisted for $($keyvault.name)"
+        }
+        else {
+            $VaultResults += "Bad: Microsoft Azure services are NOT whitelisted for $($keyvault.name)"
+        }
+
+        # Restrict Default Network Access for Azure Key Vaults
+        if ($vaultsettings.properties.networkAcls.defaultAction -match 'Deny') {
+            $VaultResults += "Good: Network access is denied by default for $($keyvault.name)"
+        }
+        else {
+            $VaultResults += "Bad: Network access is NOT denied by default for $($keyvault.name)"
+        }
+
+    }
+
+    $WAFResults += $VaultResults
 
     # End region
 
