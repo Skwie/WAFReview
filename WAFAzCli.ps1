@@ -10,8 +10,11 @@
   Example: @('d6307584-2248-4e8b-a911-2d7f1bd2613a', 'e405e642-15db-4786-9426-1e23c84d225a')
 
 .PARAMETER <ProdOnly>
-  Mandatory. If ProdOnly is true, the script will only evaluate production subscriptions. Note that this param is not evaluated if the SubscriptionIds param is filled.
+  Optional. If ProdOnly is true, the script will only evaluate production subscriptions. Note that this param is not evaluated if the SubscriptionIds param is filled.
   By default, this script runs only for production workloads.
+
+.PARAMETER <OutputToFile>
+  Optional. If OutputToFile is true, the script will output the results to a file in the results folder.
     
 .OUTPUTS
   The script progressively writes results to the terminal. After performing all checks it should also output a file per subscription listing all controls and scores.
@@ -23,7 +26,7 @@
   Creation Date:  27/03/2024
   
 .EXAMPLE
-  .\WAFAzCli.ps1 -ProdOnly $True
+  .\WAFAzCli.ps1 -ProdOnly $True -OutputToFile $True
 
 #>
 
