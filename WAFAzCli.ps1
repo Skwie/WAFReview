@@ -32,7 +32,7 @@
 param
 (
     [Parameter(Mandatory=$false)]
-    [Array]$SubscriptionIds,# = @('2bd164aa-2dfa-4a0f-a805-6028d0adeae3'),
+    [Array]$SubscriptionIds = @('2bd164aa-2dfa-4a0f-a805-6028d0adeae3'),
 
     [Parameter(Mandatory=$false)]
     $ProdOnly = $true,
@@ -359,6 +359,7 @@ foreach ($sub in $AllSubscriptions) {
     )
 
     $VaultResults = @()
+    $VaultResults += ""
     $VaultResults += "#####################################"
     $VaultResults += "WAF Assessment Results for Key Vaults"
     $VaultResults += "#####################################"
@@ -411,7 +412,7 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Audit event logging should be active for Azure Key Vault
-        $diag = az monitor diagnostic-settings list --resource $keyvault.name --query '[*].logs | []' | ConvertFrom-Json -Depth 10
+        $diag = az monitor diagnostic-settings list --resource $keyvault.id --query '[*].logs | []' | ConvertFrom-Json -Depth 10
         if (($diag | Where-Object {$_.category -eq 'AuditEvent'}).enabled -eq $True) {
             $VaultResults += "Good: Audit Events are logged for keyvault $($keyvault.name)."
         }
@@ -460,8 +461,13 @@ foreach ($sub in $AllSubscriptions) {
 
     ################# Region Outputs #####################
 
-    # This script currently writes results to the terminal.
-    # ToDo: output results as log (detailed results) and as csv to be used with MS tool.
+    # This script currently writes results to the terminal, and optionally creates a txt log file.
+    # ToDo: output results as csv to be used with MS tool.
     # Perhaps even integrate MS tool into this script? Need to check under which license it is released.
+    
+    if ($OutputToFile) {
+        $WAFResults | Out-File -FilePath ( New-Item -Path ".\results\$($sub.name).txt" -Force )
+    }
+
     Write-Output $WAFResults
 }
