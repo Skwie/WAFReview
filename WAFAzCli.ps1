@@ -347,10 +347,15 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     $KeyvaultControls = @(
-        "Check for presence of AppName tag;Custom;90"
-        "Check for presence of CI tag;Custom;90"
-        "Check for presence of CIA tag;Custom;90"
+        "Check for presence of AppName tag;Custom;80"
+        "Check for presence of CI tag;Custom;80"
+        "Check for presence of CIA tag;Custom;80"
         "Check for Key Vault Full Administrator Permissions;Custom;75"
+        "Audit event logging should be active for Azure Key Vault;Custom;90"
+        "Purge Protection should be enabled for Azure Key Vault;Custom;75"
+        "Soft Delete should be enabled for Azure Key Vault;Custom;75"
+        "Allow trusted Microsoft services to access the Key Vault;Custom;60"
+        "Restrict Default Network Access for Azure Key Vaults;Custom;"
     )
 
     $VaultResults = @()
@@ -453,5 +458,10 @@ foreach ($sub in $AllSubscriptions) {
 
     # End region
 
+    ################# Region Outputs #####################
+
+    # This script currently writes results to the terminal.
+    # ToDo: output results as log (detailed results) and as csv to be used with MS tool.
+    # Perhaps even integrate MS tool into this script? Need to check under which license it is released.
     Write-Output $WAFResults
 }
