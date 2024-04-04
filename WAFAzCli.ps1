@@ -32,7 +32,7 @@
 param
 (
     [Parameter(Mandatory=$false)]
-    [Array]$SubscriptionIds = @('2bd164aa-2dfa-4a0f-a805-6028d0adeae3'),
+    [Array]$SubscriptionIds,
 
     [Parameter(Mandatory=$false)]
     $ProdOnly = $true,
@@ -120,7 +120,7 @@ foreach ($sub in $AllSubscriptions) {
 
     foreach ($strg in $StorageAccounts) {
         $StorageResults += ""
-        $StorageResults += "Storage Account - $($strg.name)"
+        $StorageResults += "----- Storage Account - $($strg.name) -----"
         $StorageResults += ""
         
         ## Reliability Pillar ##
@@ -370,7 +370,7 @@ foreach ($sub in $AllSubscriptions) {
     foreach ($keyvault in $Keyvaults) {
 
         $VaultResults += ""
-        $VaultResults += "Key Vault - $($keyvault.name)"
+        $VaultResults += "----- Key Vault - $($keyvault.name) -----"
         $VaultResults += ""
 
         # Check for presence of AppName tag
