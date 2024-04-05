@@ -7,7 +7,7 @@
 
 .PARAMETER <SubscriptionIds>
   Optional. An array of IDs for the subscriptions that you want to assess. If no SubscriptionId is entered, the script runs for all subscriptions.
-  Example: @('d6307584-2248-4e8b-a911-2d7f1bd2613a', 'e405e642-15db-4786-9426-1e23c84d225a')
+  Example: @('b6307584-2248-4e8b-a911-2d7f1bd2613a', 'c405e642-15db-4786-9426-1e23c84d225a')
 
 .PARAMETER <ProdOnly>
   Optional. If ProdOnly is true, the script will only evaluate production subscriptions. Note that this param is not evaluated if the SubscriptionIds param is filled.
