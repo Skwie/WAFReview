@@ -478,25 +478,31 @@ foreach ($sub in $AllSubscriptions) {
         # Check for presence of AppName tag
         if ($keyvault.tags.AppName) {
             $VaultResults += "Good: AppName tag is present on Key Vault $($keyvault.name)"
+            $kvControlArray[0].Result = 100
         }
         else {
             $VaultResults += "Bad: AppName tag is NOT present on Key Vault $($keyvault.name)"
+            $kvControlArray[0].Result = 0
         }
 
         # Check for presence of CI tag
         if ($keyvault.tags.'Business Application CI') {
             $VaultResults += "Good: Application CI tag is present on Key Vault $($keyvault.name)"
+            $kvControlArray[1].Result = 100
         }
         else {
             $VaultResults += "Bad: Application CI tag is NOT present on Key Vault $($keyvault.name)"
+            $kvControlArray[1].Result = 0
         }
 
         # Check for presence of CIA tag
         if ($keyvault.tags.CIA) {
             $VaultResults += "Good: CIA tag is present on Key Vault $($keyvault.name)"
+            $kvControlArray[2].Result = 100
         }
         else {
             $VaultResults += "Bad: CIA tag is NOT present on Key Vault $($keyvault.name)"
+            $kvControlArray[2].Result = 0
         }
 
         # Check for Key Vault Full Administrator Permissions
@@ -508,54 +514,81 @@ foreach ($sub in $AllSubscriptions) {
                     $VaultResults += "Principal with ID $($perm.PrincipalId) has Full Access on one or all of Certificates/Keys/Secrets/Storage."
                 }
             }
+            $kvControlArray[3].Result = 0
         }
         else {
             $VaultResults += "Good: No Full Access permissions found on keyvault $($keyvault.name)"
+            $kvControlArray[3].Result = 100
         }
 
         # Audit event logging should be active for Azure Key Vault
         $diag = az monitor diagnostic-settings list --resource $keyvault.id --query '[*].logs | []' | ConvertFrom-Json -Depth 10
         if (($diag | Where-Object {$_.category -eq 'AuditEvent'}).enabled -eq $True) {
             $VaultResults += "Good: Audit Events are logged for keyvault $($keyvault.name)."
+            $kvControlArray[4].Result = 100
         }
         else {
             $VaultResults += "Bad: Audit Events are NOT logged for keyvault $($keyvault.name)."
+            $kvControlArray[4].Result = 0
         }
 
         # Purge Protection should be enabled for Azure Key Vault
         $vaultsettings = az keyvault show --name $keyvault.name | ConvertFrom-Json -Depth 10
         if ($vaultsettings.properties.enablePurgeProtection -eq 'True') {
             $VaultResults += "Good: Purge Protection is enabled for keyvault $($keyvault.name)"
+            $kvControlArray[5].Result = 100
         }
         else {
             $VaultResults += "Bad: Purge Protection is NOT enabled for keyvault $($keyvault.name)"
+            $kvControlArray[5].Result = 0
         }
 
         # Soft Delete should be enabled for Azure Key Vault
         if ($vaultsettings.properties.enableSoftDelete -eq 'True') {
             $VaultResults += "Good: Soft Delete is enabled for keyvault $($keyvault.name)"
+            $kvControlArray[6].Result = 100
         }
         else {
             $VaultResults += "Bad: Soft Delete is NOT enabled for keyvault $($keyvault.name)"
+            $kvControlArray[6].Result = 0
         }
 
         # Allow trusted Microsoft services to access the Key Vault
         if ($vaultsettings.properties.networkAcls.bypass -match 'AzureServices') {
             $VaultResults += "Good: Microsoft Azure services are whitelisted for $($keyvault.name)"
+            $kvControlArray[7].Result = 100
         }
         else {
             $VaultResults += "Bad: Microsoft Azure services are NOT whitelisted for $($keyvault.name)"
+            $kvControlArray[7].Result = 0
         }
 
         # Restrict Default Network Access for Azure Key Vaults
         if ($vaultsettings.properties.networkAcls.defaultAction -match 'Deny') {
             $VaultResults += "Good: Network access is denied by default for $($keyvault.name)"
+            $kvControlArray[8].Result = 100
         }
         else {
             $VaultResults += "Bad: Network access is NOT denied by default for $($keyvault.name)"
+            $kvControlArray[8].Result = 0
         }
 
+        # Calculate the weighted average for the key vault
+        $kvScore = $kvControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
+        $kvAvgScore = $kvScore / $kvTotalWeight
+        $roundedKvAvg = [math]::Round($kvAvgScore, 1)
+
+        $VaultResults += ""
+        $VaultResults += "Key Vault $($keyvault.name) has an average score of $roundedKvAvg %."
+        $VaultResults += ""
+
     }
+
+    $kvTotalAvg = $kvScore / ($kvTotalWeight * $Keyvaults.Count)
+    $roundedKvTotalAvg = [math]::Round($kvTotalAvg, 1)
+
+    $VaultResults += "Total average score for all key vaults in subscription $($sub.name) is $roundedKvTotalAvg %."
+    $VaultResults += ""
 
     $WAFResults += $VaultResults
 
