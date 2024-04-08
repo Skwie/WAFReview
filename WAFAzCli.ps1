@@ -393,18 +393,19 @@ foreach ($sub in $AllSubscriptions) {
         # Calculate the weighted average for the storage account
         $storageScore = $strgControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
         $storageAvgScore = $storageScore / $strgTotalWeight
+        $roundedStorageAvg = [math]::Round($storageAvgScore, 1)
 
         $StorageResults += ""
-        $StorageResults += "Storage Account $($strg.name) has an average score of $storageAvgScore."
+        $StorageResults += "Storage Account $($strg.name) has an average score of $roundedStorageAvg %."
         $StorageResults += ""
 
         $storageTotalScore += $storageScore
     }
 
     $storageTotalAvg = $storageTotalScore / ($strgTotalWeight * $StorageAccounts.Count)
+    $roundedStorageTotalAvg = [math]::Round($storageTotalAvg, 1)
 
-    $StorageResults += ""
-    $StorageResults += "Total average score for all storage accounts in subscription $($sub.name) is $storageTotalAvg."
+    $StorageResults += "Total average score for all storage accounts in subscription $($sub.name) is $roundedStorageTotalAvg %."
     $StorageResults += ""
 
     if (!$StorageAccounts) {
@@ -571,4 +572,6 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     Write-Output $WAFResults
+
+    # End region
 }

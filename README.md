@@ -33,7 +33,7 @@ You may want to modify this to a pattern that matches your particular environmen
 ### Features
 
 - **Assessment**: The script performs an automated assessment of adherence to the Azure WAF for Azure resources.
-- **Reporting**: After the assessment is completed, the script generates a detailed report in txt format, providing an overview of the findings and recommendations for improving the WAF configuration.
+- **Reporting**: After the assessment is completed, the script generates a detailed report in txt format, providing an overview of the findings and recommendations for improving your WAF posture.
 
 ### Examples
 
