@@ -115,6 +115,9 @@ foreach ($sub in $AllSubscriptions) {
     $StorageResults += "WAF Assessment Results for Storage Accounts"
     $StorageResults += "###########################################"
 
+    $storageTotalAvg = 0
+    $storageTotalScore = 0
+
     # Do a subscription-level query so it's not repeated for all storage accounts
     $DefenderStatus = az security pricing show --name StorageAccounts | ConvertFrom-Json -Depth 10
     if ($DefenderStatus.pricingTier -match 'Standard') {
@@ -122,6 +125,29 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     foreach ($strg in $StorageAccounts) {
+
+        $strgControlArray = @()
+
+        foreach ($control in $StorageControls) {
+            $strgCheck = $control.Split(';')
+            $strgCheckName = $strgCheck[0]
+            $strgCheckPillars = $strgCheck[1].Split(',')
+            $strgCheckWeight = $strgCheck[2]
+    
+            $strgControlArray += [PSCustomObject]@{
+                Name = $strgCheckName
+                Pillars = $strgCheckPillars
+                Weight = $strgCheckWeight
+                Result = $null
+            }
+        }
+
+        # Calculate total weight to calculate weighted average
+        $strgTotalWeight = 0
+        foreach ($control in $strgControlArray) {
+            $strgTotalWeight += $control.Weight
+        }
+
         $StorageResults += ""
         $StorageResults += "----- Storage Account - $($strg.name) -----"
         $StorageResults += ""
@@ -138,18 +164,22 @@ foreach ($sub in $AllSubscriptions) {
         }
         if ($RetentionPolicy.deleteRetentionPolicy.enabled) {
             $StorageResults += "Good: Soft Delete is active for $($strg.name)"
+            $strgControlArray[0].Result = 100
         }
         else {
             $StorageResults += "Bad: Soft Delete is NOT active for $($strg.name)"
+            $strgControlArray[0].Result = 0
         }
         $RetentionPolicy = $null
 
         # Use Microsoft Entra ID to authorize access to blob data
         if ($strg.allowBlobPublicAccess -match 'False') {
             $StorageResults += "Good: Public access is disabled for blob data on storage account $($strg.name)."
+            $strgControlArray[1].Result = 100
         }
         else {
             $StorageResults += "Bad: Public access is ENABLED for blob data on storage account $($strg.name)."
+            $strgControlArray[1].Result = 0
         }
 
         # Consider the principle of least privilege when you assign permissions to a Microsoft Entra security principal through Azure RBAC.
@@ -162,50 +192,62 @@ foreach ($sub in $AllSubscriptions) {
         ## Unable to query immutability due to this information being stored on container level, requiring a connection string, storage account key or SAS token.
         if (($BlobProperties | ConvertFrom-Json -Depth 10).isVersioningEnabled) {
             $StorageResults += "Good: Versioning is enabled for storage account $($strg.name)."
+            $strgControlArray[2].Result = 100
         }
         else {
-            $StorageResults += "Informational: Versioning is not enabled for storage account $($strg.name)."
+            $StorageResults += "Informational: Versioning is not enabled for storage account $($strg.name). Immutability might be enabled on container level, but can not be checked."
+            $strgControlArray[2].Result = 50
         }
         #az storage container list --account-name $strg.name --query '[*].{"ContainerName":name, "TimeBasedRetentionPolicy":properties.hasImmutabilityPolicy, "LegalHoldPolicy": properties.hasLegalHold}'
 
         # Restrict default internet access for storage accounts.
         if ($strg.networkRuleSet.defaultAction -match 'Deny') {
             $StorageResults += "Good: Default internet access for storage account $($strg.name) is set to Deny."
+            $strgControlArray[3].Result = 100
         }
         else {
             $StorageResults += "Bad: Default internet access for storage account $($strg.name) is NOT set to Deny."
+            $strgControlArray[3].Result = 0
         }
 
         # Enable firewall rules.
         if ($strg.networkRuleSet) {
             $StorageResults += "Good: Firewall is active for storage account $($strg.name)."
+            $strgControlArray[4].Result = 100
         }
         else {
             $StorageResults += "Bad: Firewall is NOT active for storage account $($strg.name)."
+            $strgControlArray[4].Result = 0
         }
 
         # Limit network access to specific networks.
         if ($strg.allowBlobPublicAccess -match 'False') {
             $StorageResults += "Good: Blob Public Access is disabled for storage account $($strg.name)."
+            $strgControlArray[5].Result = 100
         }
         else {
             $StorageResults += "Bad: Blob Public Access is NOT disabled for storage account $($strg.name)."
+            $strgControlArray[5].Result = 0
         }
 
         # Allow trusted Microsoft services to access the storage account.
         if ($strg.networkRuleSet.bypass -match 'AzureServices') {
             $StorageResults += "Good: Microsoft Azure Services are whitelisted for storage account $($strg.name)."
+            $strgControlArray[6].Result = 100
         }
         else {
             $StorageResults += "Bad: Microsoft Azure Services are NOT whitelisted for storage account $($strg.name)."
+            $strgControlArray[6].Result = 0
         }
 
         # Enable the Secure transfer required option on all your storage accounts.
         if ($strg.enableHttpsTrafficOnly -match 'True') {
             $StorageResults += "Good: Secure Transfer (HTTPS) is enforced for storage account $($strg.name)."
+            $strgControlArray[7].Result = 100
         }
         else {
             $StorageResults += "Bad: Secure Transfer (HTTPS) is NOT enforced for storage account $($strg.name)."
+            $strgControlArray[7].Result = 0
         }
 
         # Limit shared access signature (SAS) tokens to HTTPS connections only.
@@ -215,9 +257,11 @@ foreach ($sub in $AllSubscriptions) {
         # Avoid and prevent using Shared Key authorization to access storage accounts.
         if ($strg.allowSharedKeyAccess -match 'False') {
             $StorageResults += "Good: Shared Key authorization is disabled for storage account $($strg.name)."
+            $strgControlArray[8].Result = 100
         }
         else {
             $StorageResults += "Bad: Shared Key authorization is NOT disabled for storage account $($strg.name)."
+            $strgControlArray[8].Result = 0
         }
         
         # Regenerate your account keys periodically.
@@ -232,9 +276,11 @@ foreach ($sub in $AllSubscriptions) {
         }
         if ($Regenerated) {
             $StorageResults += "Good: Storage account keys have been regenerated in the past 90 days for storage account $($strg.name)."
+            $strgControlArray[9].Result = 100
         }
         else {
             $StorageResults += "Bad: Storage account keys have NOT been regenerated in the past 90 days for storage account $($strg.name)."
+            $strgControlArray[9].Result = 0
             # NOTE: Every storage account currently returns this. It is still unclear whether the query does not return the correct results, or storage keys are not regenerated on any ABN storage account.
         }
 
@@ -250,9 +296,11 @@ foreach ($sub in $AllSubscriptions) {
         # Enable Azure Defender for all your storage accounts.
         if ($DefenderActive) {
             $StorageResults += "Good: Defender for Storage is enabled for storage account $($strg.name)."
+            $strgControlArray[10].Result = 100
         }
         else {
             $StorageResults += "Bad: Defender for Storage is NOT enabled for storage account $($strg.name)."
+            $strgControlArray[10].Result = 0
         }
 
         ## Cost Optimization ##
@@ -263,23 +311,28 @@ foreach ($sub in $AllSubscriptions) {
         # Organize data into access tiers.
         if ($strg.accessTier -match 'Hot') {
             $StorageResults += "Informational: Storage account $($strg.name) has an access tier of 'Hot'. Depending on usage demand, costs could be reduced by choosing a lower tier."
+            $strgControlArray[11].Result = 100
         }
         else {
             $StorageResults += "Informational: Storage account $($strg.name) has an access tier of '$($strg.accessTier)'."
+            $strgControlArray[11].Result = 100
         }
         
         # Use lifecycle policy to move data between access tiers.
         $policy = az storage account management-policy show --account-name $strg.name --resource-group $strg.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
         if (($BlobProperties | ConvertFrom-Json -Depth 10).lastAccessTimeTrackingPolicy) {
             $StorageResults += "Good: Last access time tracking Lifecycle policy found for storage account $($strg.name)."
+            $strgControlArray[12].Result = 100
         }
         elseif ($policy) {
             if ($policy.policy.rules.type -match 'Lifecycle') {
                 $StorageResults += "Good: Data deletion Lifecycle policy found for storage account $($strg.name)."
+                $strgControlArray[12].Result = 100
             }
         }
         else {
             $StorageResults += "Bad: No Lifecycle policy found for storage account $($strg.name)."
+            $strgControlArray[12].Result = 0
         }
         $policy = $null
 
@@ -298,38 +351,61 @@ foreach ($sub in $AllSubscriptions) {
         # Configure Minimum TLS Version
         if ($strg.minimumTlsVersion -match 'TLS1_2') {
             $StorageResults += "Good: TLS 1.2 is the minimum TLS version allowed on storage account $($strg.name)."
+            $strgControlArray[13].Result = 100
         }
         else {
             $StorageResults += "Bad: The minimum version is NOT set to TLS 1.2 on storage account $($strg.name)."
+            $strgControlArray[13].Result = 0
         }
 
         # Enable Infrastructure Encryption
         $EncryptStatus = az storage account show --name $strg.name --query '{"requireInfrastructureEncryption":encryption.requireInfrastructureEncryption}' 2> $null | ConvertFrom-Json -Depth 10
         if ($EncryptStatus.requireInfrastructureEncryption -match $True) {
             $StorageResults += "Good: Storage Account Infrastructure Encryption is enabled for storage account $($strg.name)."
+            $strgControlArray[14].Result = 100
         }
         else {
             $StorageResults += "Bad: Storage Account Infrastructure Encryption is NOT enabled for storage account $($strg.name)."
+            $strgControlArray[14].Result = 0
         }
 
         # Private Endpoint in Use
         $pep = az storage account show --name $strg.name --query 'privateEndpointConnections' 2> $null
         if ($pep -match '\[\]') {
             $StorageResults += "Bad: No Private Endpoint attached to storage account $($strg.name)."
+            $strgControlArray[15].Result = 0
         }
         else {
             $StorageResults += "Good: A Private Endpoint is attached to storage account $($strg.name)."
+            $strgControlArray[15].Result = 100
         }
 
         # Storage Account Encryption using Customer Managed Keys
         if (az storage account show --name $strg.name --query 'encryption.keyVaultProperties.keyName' 2> $null) {
             $StorageResults += "Good: Storage account $($strg.name) is encrypted using Customer Managed Keys."
+            $strgControlArray[16].Result = 100
         }
         else {
             $StorageResults += "Bad: Storage account $($strg.name) is NOT encrypted using Customer Managed Keys."
+            $strgControlArray[16].Result = 0
         }
 
+        # Calculate the weighted average for the storage account
+        $storageScore = $strgControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
+        $storageAvgScore = $storageScore / $strgTotalWeight
+
+        $StorageResults += ""
+        $StorageResults += "Storage Account $($strg.name) has an average score of $storageAvgScore."
+        $StorageResults += ""
+
+        $storageTotalScore += $storageScore
     }
+
+    $storageTotalAvg = $storageTotalScore / ($strgTotalWeight * $StorageAccounts.Count)
+
+    $StorageResults += ""
+    $StorageResults += "Total average score for all storage accounts in subscription $($sub.name) is $storageTotalAvg."
+    $StorageResults += ""
 
     if (!$StorageAccounts) {
         $StorageResults += "No storage accounts found for subscription $($sub.name)."
@@ -358,7 +434,7 @@ foreach ($sub in $AllSubscriptions) {
         "Purge Protection should be enabled for Azure Key Vault;Custom;75"
         "Soft Delete should be enabled for Azure Key Vault;Custom;75"
         "Allow trusted Microsoft services to access the Key Vault;Custom;60"
-        "Restrict Default Network Access for Azure Key Vaults;Custom;"
+        "Restrict Default Network Access for Azure Key Vaults;Custom;80"
     )
 
     $VaultResults = @()
@@ -371,6 +447,28 @@ foreach ($sub in $AllSubscriptions) {
     # We will primarily be using the Conformity checks, as well as IT Guardrail checks.
     
     foreach ($keyvault in $Keyvaults) {
+
+        $kvControlArray = @()
+
+        foreach ($control in $KeyvaultControls) {
+            $kvCheck = $control.Split(';')
+            $kvCheckName = $kvCheck[0]
+            $kvCheckPillars = $kvCheck[1].Split(',')
+            $kvCheckWeight = $kvCheck[2]
+    
+            $kvControlArray += [PSCustomObject]@{
+                Name = $kvCheckName
+                Pillars = $kvCheckPillars
+                Weight = $kvCheckWeight
+                Result = $null
+            }
+        }
+
+        # Calculate total weight to calculate weighted average
+        $kvTotalWeight = 0
+        foreach ($control in $kvControlArray) {
+            $kvTotalWeight += $control.Weight
+        }
 
         $VaultResults += ""
         $VaultResults += "----- Key Vault - $($keyvault.name) -----"
