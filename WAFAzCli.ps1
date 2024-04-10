@@ -52,6 +52,18 @@ function Get-TotalWeights($array) {
     return $totalWeight
 }
 
+function Get-WeightedAverage($array) {
+    if ($array.Weight = !$null) {
+        $score = $array | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
+        $weight = $array | ForEach-Object { $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
+        $weightedAverage = [math]::Round(($score / $weight),1)
+        return $weightedAverage
+    }
+    else {
+        return $null
+    }
+}
+
 ################# Region Setup #####################
 
 if (!$azsession) {
@@ -637,33 +649,23 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     $allStrgWeightedAverages = @()
-    $strgReliabilityScore = $strgReliabilityScores | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
-    $strgReliabilityWeight = $strgReliabilityScores | ForEach-Object { $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
-    $strgReliabilityWeightedAverage = [math]::Round(($strgReliabilityScore / $strgReliabilityWeight),1)
-    $strgSecurityScore = $strgSecurityScores | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
-    $strgSecurityWeight = $strgSecurityScores | ForEach-Object { $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
-    $strgSecurityWeightedAverage = [math]::Round(($strgSecurityScore / $strgSecurityWeight),1)
-    $strgOperationalExcellenceScore = $strgOperationalExcellenceScores | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
-    $strgOperationalExcellenceWeight = $strgOperationalExcellenceScores | ForEach-Object { $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
-    $strgOperationalExcellenceWeightedAverage = [math]::Round(($strgOperationalExcellenceScore / $strgOperationalExcellenceWeight),1)
-    $strgCostOptimizationScore = $strgCostOptimizationScores | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
-    $strgCostOptimizationWeight = $strgCostOptimizationScores | ForEach-Object { $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
-    $strgCostOptimizationWeightedAverage = [math]::Round(($strgCostOptimizationScore / $strgCostOptimizationWeight),1)
-    $strgPerformanceEfficiencyScore = $strgPerformanceEfficiencyScores | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
-    $strgPerformanceEfficiencyWeight = $strgPerformanceEfficiencyScores | ForEach-Object { $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
-    $strgPerformanceEfficiencyWeightedAverage = [math]::Round(($strgPerformanceEfficiencyScore / $strgPerformanceEfficiencyWeight),1)
-    $strgCustomScore = $strgCustomScores | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
-    $strgCustomWeight = $strgCustomScores | ForEach-Object { $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
-    $strgCustomWeightedAverage = [math]::Round(($strgCustomScore / $strgCustomWeight),1)
+    $strgReliabilityWeightedAverage = Get-WeightedAverage($strgReliabilityScores)
+    $strgSecurityWeightedAverage = Get-WeightedAverage($strgSecurityScores)
+    $strgOperationalExcellenceWeightedAverage = Get-WeightedAverage($strgOperationalExcellenceScores)
+    $strgCostOptimizationWeightedAverage = Get-WeightedAverage($strgCostOptimizationScores)
+    $strgPerformanceEfficiencyWeightedAverage = Get-WeightedAverage($strgPerformanceEfficiencyScores)
+    $strgCustomWeightedAverage = Get-WeightedAverage($strgCustomScores)
 
-    if ($strgReliabilityWeightedAverage) {$allStrgWeightedAverages += "Reliability Pillar;$strgReliabilityWeightedAverage"}
-    if ($strgSecurityWeightedAverage) {$allStrgWeightedAverages += "Security Pillar;$strgSecurityWeightedAverage"}
-    if ($strgOperationalExcellenceWeightedAverage) {$allStrgWeightedAverages += "Operational Excellence Pillar;$strgOperationalExcellenceWeightedAverage"}
-    if ($strgCostOptimizationWeightedAverage) {$allStrgWeightedAverages += "Cost Optimization Pillar;$strgCostOptimizationWeightedAverage"}
-    if ($strgPerformanceEfficiencyWeightedAverage) {$allStrgWeightedAverages += "Performance Efficiency Pillar;$strgPerformanceEfficiencyWeightedAverage"}
-    if ($strgCustomWeightedAverage) {$allStrgWeightedAverages += "Custom Checks;$strgCustomWeightedAverage"}
+    if ($strgReliabilityWeightedAverage -ne 'NaN') {$allStrgWeightedAverages += "Reliability Pillar;$strgReliabilityWeightedAverage"}
+    if ($strgSecurityWeightedAverage -ne 'NaN') {$allStrgWeightedAverages += "Security Pillar;$strgSecurityWeightedAverage"}
+    if ($strgOperationalExcellenceWeightedAverage -ne 'NaN') {$allStrgWeightedAverages += "Operational Excellence Pillar;$strgOperationalExcellenceWeightedAverage"}
+    if ($strgCostOptimizationWeightedAverage -ne 'NaN') {$allStrgWeightedAverages += "Cost Optimization Pillar;$strgCostOptimizationWeightedAverage"}
+    if ($strgPerformanceEfficiencyWeightedAverage -ne 'NaN') {$allStrgWeightedAverages += "Performance Efficiency Pillar;$strgPerformanceEfficiencyWeightedAverage"}
+    if ($strgCustomWeightedAverage -ne 'NaN') {$allStrgWeightedAverages += "Custom Checks;$strgCustomWeightedAverage"}
 
-    Write-Output $allStrgWeightedAverages
+    foreach ($strgAvg in $allStrgWeightedAverages) {
+        Write-Output $strgAvg
+    }
 
     ################# Region Outputs #####################
 
