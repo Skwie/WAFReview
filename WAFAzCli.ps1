@@ -615,55 +615,78 @@ foreach ($sub in $AllSubscriptions) {
 
     ############# Region Score by Pillars ################
 
+    $allStrgWeightedAverages = @()
+    $allKvWeightedAverages = @()
+
     $strgReliabilityScores = @()
     $strgSecurityScores = @()
     $strgOperationalExcellenceScores = @()
     $strgCostOptimizationScores = @()
     $strgPerformanceEfficiencyScores = @()
     $strgCustomScores = @()
-    foreach ($contr in $strgControlArray) {
-        if ($contr.Pillars -contains 'Reliability') {
-            $strgReliabilityScores += $contr
-        }
-    
-        if ($contr.Pillars -contains 'Security') {
-            $strgSecurityScores += $contr
+    $kvReliabilityScores = @()
+    $kvSecurityScores = @()
+    $kvOperationalExcellenceScores = @()
+    $kvCostOptimizationScores = @()
+    $kvPerformanceEfficiencyScores = @()
+    $kvCustomScores = @()
+
+    if ($StorageAccounts) {
+        foreach ($contr in $strgControlArray) {
+            if ($contr.Pillars -contains 'Reliability') {$strgReliabilityScores += $contr}
+            if ($contr.Pillars -contains 'Security') {$strgSecurityScores += $contr}
+            if ($contr.Pillars -contains 'Operational Excellence') {$strgOperationalExcellenceScores += $contr}
+            if ($contr.Pillars -contains 'Cost Optimization') {$strgCostOptimizationScores += $contr}
+            if ($contr.Pillars -contains 'Performance Efficiency') {$strgPerformanceEfficiencyScores += $contr}
+            if ($contr.Pillars -contains 'Custom') {$strgCustomScores += $contr}
         }
 
-        if ($contr.Pillars -contains 'Operational Excellence') {
-            $strgOperationalExcellenceScores += $contr
-        }
+        $strgReliabilityWeightedAverage = Get-WeightedAverage($strgReliabilityScores)
+        $strgSecurityWeightedAverage = Get-WeightedAverage($strgSecurityScores)
+        $strgOperationalExcellenceWeightedAverage = Get-WeightedAverage($strgOperationalExcellenceScores)
+        $strgCostOptimizationWeightedAverage = Get-WeightedAverage($strgCostOptimizationScores)
+        $strgPerformanceEfficiencyWeightedAverage = Get-WeightedAverage($strgPerformanceEfficiencyScores)
+        $strgCustomWeightedAverage = Get-WeightedAverage($strgCustomScores)
 
-        if ($contr.Pillars -contains 'Cost Optimization') {
-            $strgCostOptimizationScores += $contr
-        }
+        if ($strgReliabilityWeightedAverage -notmatch 'NaN') {$allStrgWeightedAverages += "Reliability Pillar;$strgReliabilityWeightedAverage"}
+        if ($strgSecurityWeightedAverage -notmatch 'NaN') {$allStrgWeightedAverages += "Security Pillar;$strgSecurityWeightedAverage"}
+        if ($strgOperationalExcellenceWeightedAverage -notmatch 'NaN') {$allStrgWeightedAverages += "Operational Excellence Pillar;$strgOperationalExcellenceWeightedAverage"}
+        if ($strgCostOptimizationWeightedAverage -notmatch 'NaN') {$allStrgWeightedAverages += "Cost Optimization Pillar;$strgCostOptimizationWeightedAverage"}
+        if ($strgPerformanceEfficiencyWeightedAverage -notmatch 'NaN') {$allStrgWeightedAverages += "Performance Efficiency Pillar;$strgPerformanceEfficiencyWeightedAverage"}
+        if ($strgCustomWeightedAverage -notmatch 'NaN') {$allStrgWeightedAverages += "Custom Checks;$strgCustomWeightedAverage"}
 
-        if ($contr.Pillars -contains 'Performance Efficiency') {
-            $strgPerformanceEfficiencyScores += $contr
-        }
-
-        if ($contr.Pillars -contains 'Custom') {
-            $strgCustomScores += $contr
+        foreach ($strgAvg in $allStrgWeightedAverages) {
+            Write-Output $strgAvg
         }
     }
 
-    $allStrgWeightedAverages = @()
-    $strgReliabilityWeightedAverage = Get-WeightedAverage($strgReliabilityScores)
-    $strgSecurityWeightedAverage = Get-WeightedAverage($strgSecurityScores)
-    $strgOperationalExcellenceWeightedAverage = Get-WeightedAverage($strgOperationalExcellenceScores)
-    $strgCostOptimizationWeightedAverage = Get-WeightedAverage($strgCostOptimizationScores)
-    $strgPerformanceEfficiencyWeightedAverage = Get-WeightedAverage($strgPerformanceEfficiencyScores)
-    $strgCustomWeightedAverage = Get-WeightedAverage($strgCustomScores)
+    if ($Keyvaults) {
+        foreach ($contr in $kvControlArray) {
+            if ($contr.Pillars -contains 'Reliability') {$kvReliabilityScores += $contr}
+            if ($contr.Pillars -contains 'Security') {$kvSecurityScores += $contr}
+            if ($contr.Pillars -contains 'Operational Excellence') {$kvOperationalExcellenceScores += $contr}
+            if ($contr.Pillars -contains 'Cost Optimization') {$kvCostOptimizationScores += $contr}
+            if ($contr.Pillars -contains 'Performance Efficiency') {$kvPerformanceEfficiencyScores += $contr}
+            if ($contr.Pillars -contains 'Custom') {$kvCustomScores += $contr}
+        }
 
-    if ($strgReliabilityWeightedAverage -notmatch 'NaN') {$allStrgWeightedAverages += "Reliability Pillar;$strgReliabilityWeightedAverage"}
-    if ($strgSecurityWeightedAverage -notmatch 'NaN') {$allStrgWeightedAverages += "Security Pillar;$strgSecurityWeightedAverage"}
-    if ($strgOperationalExcellenceWeightedAverage -notmatch 'NaN') {$allStrgWeightedAverages += "Operational Excellence Pillar;$strgOperationalExcellenceWeightedAverage"}
-    if ($strgCostOptimizationWeightedAverage -notmatch 'NaN') {$allStrgWeightedAverages += "Cost Optimization Pillar;$strgCostOptimizationWeightedAverage"}
-    if ($strgPerformanceEfficiencyWeightedAverage -notmatch 'NaN') {$allStrgWeightedAverages += "Performance Efficiency Pillar;$strgPerformanceEfficiencyWeightedAverage"}
-    if ($strgCustomWeightedAverage -notmatch 'NaN') {$allStrgWeightedAverages += "Custom Checks;$strgCustomWeightedAverage"}
+        $kvReliabilityWeightedAverage = Get-WeightedAverage($kvReliabilityScores)
+        $kvSecurityWeightedAverage = Get-WeightedAverage($kvSecurityScores)
+        $kvOperationalExcellenceWeightedAverage = Get-WeightedAverage($kvOperationalExcellenceScores)
+        $kvCostOptimizationWeightedAverage = Get-WeightedAverage($kvCostOptimizationScores)
+        $kvPerformanceEfficiencyWeightedAverage = Get-WeightedAverage($kvPerformanceEfficiencyScores)
+        $kvCustomWeightedAverage = Get-WeightedAverage($kvCustomScores)
 
-    foreach ($strgAvg in $allStrgWeightedAverages) {
-        Write-Output $strgAvg
+        if ($kvReliabilityWeightedAverage -notmatch 'NaN') {$allKvWeightedAverages += "Reliability Pillar;$kvReliabilityWeightedAverage"}
+        if ($kvSecurityWeightedAverage -notmatch 'NaN') {$allKvWeightedAverages += "Security Pillar;$kvSecurityWeightedAverage"}
+        if ($kvOperationalExcellenceWeightedAverage -notmatch 'NaN') {$allKvWeightedAverages += "Operational Excellence Pillar;$kvOperationalExcellenceWeightedAverage"}
+        if ($kvCostOptimizationWeightedAverage -notmatch 'NaN') {$allKvWeightedAverages += "Cost Optimization Pillar;$kvCostOptimizationWeightedAverage"}
+        if ($kvPerformanceEfficiencyWeightedAverage -notmatch 'NaN') {$allKvWeightedAverages += "Performance Efficiency Pillar;$kvPerformanceEfficiencyWeightedAverage"}
+        if ($kvCustomWeightedAverage -notmatch 'NaN') {$allKvWeightedAverages += "Custom Checks;$kvCustomWeightedAverage"}
+
+        foreach ($kvAvg in $allKvWeightedAverages) {
+            Write-Output $kvAvg
+        }
     }
 
     # End region
