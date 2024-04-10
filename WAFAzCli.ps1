@@ -44,6 +44,8 @@ param
     $OutputToFile = $false
 )
 
+################# Region Functions #################
+
 function Get-TotalWeights($array) {
     $totalWeight = 0
     foreach ($control in $array) {
@@ -53,16 +55,13 @@ function Get-TotalWeights($array) {
 }
 
 function Get-WeightedAverage($array) {
-    if ($array.Weight = !$null) {
-        $score = $array | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
-        $weight = $array | ForEach-Object { $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
-        $weightedAverage = [math]::Round(($score / $weight),1)
-        return $weightedAverage
-    }
-    else {
-        return $null
-    }
+    $score = $array | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
+    $weight = $array | ForEach-Object { $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
+    $weightedAverage = [math]::Round(($score / $weight),1)
+    return $weightedAverage
 }
+
+# End region
 
 ################# Region Setup #####################
 
@@ -656,16 +655,18 @@ foreach ($sub in $AllSubscriptions) {
     $strgPerformanceEfficiencyWeightedAverage = Get-WeightedAverage($strgPerformanceEfficiencyScores)
     $strgCustomWeightedAverage = Get-WeightedAverage($strgCustomScores)
 
-    if ($strgReliabilityWeightedAverage -ne 'NaN') {$allStrgWeightedAverages += "Reliability Pillar;$strgReliabilityWeightedAverage"}
-    if ($strgSecurityWeightedAverage -ne 'NaN') {$allStrgWeightedAverages += "Security Pillar;$strgSecurityWeightedAverage"}
-    if ($strgOperationalExcellenceWeightedAverage -ne 'NaN') {$allStrgWeightedAverages += "Operational Excellence Pillar;$strgOperationalExcellenceWeightedAverage"}
-    if ($strgCostOptimizationWeightedAverage -ne 'NaN') {$allStrgWeightedAverages += "Cost Optimization Pillar;$strgCostOptimizationWeightedAverage"}
-    if ($strgPerformanceEfficiencyWeightedAverage -ne 'NaN') {$allStrgWeightedAverages += "Performance Efficiency Pillar;$strgPerformanceEfficiencyWeightedAverage"}
-    if ($strgCustomWeightedAverage -ne 'NaN') {$allStrgWeightedAverages += "Custom Checks;$strgCustomWeightedAverage"}
+    if ($strgReliabilityWeightedAverage -notmatch 'NaN') {$allStrgWeightedAverages += "Reliability Pillar;$strgReliabilityWeightedAverage"}
+    if ($strgSecurityWeightedAverage -notmatch 'NaN') {$allStrgWeightedAverages += "Security Pillar;$strgSecurityWeightedAverage"}
+    if ($strgOperationalExcellenceWeightedAverage -notmatch 'NaN') {$allStrgWeightedAverages += "Operational Excellence Pillar;$strgOperationalExcellenceWeightedAverage"}
+    if ($strgCostOptimizationWeightedAverage -notmatch 'NaN') {$allStrgWeightedAverages += "Cost Optimization Pillar;$strgCostOptimizationWeightedAverage"}
+    if ($strgPerformanceEfficiencyWeightedAverage -notmatch 'NaN') {$allStrgWeightedAverages += "Performance Efficiency Pillar;$strgPerformanceEfficiencyWeightedAverage"}
+    if ($strgCustomWeightedAverage -notmatch 'NaN') {$allStrgWeightedAverages += "Custom Checks;$strgCustomWeightedAverage"}
 
     foreach ($strgAvg in $allStrgWeightedAverages) {
         Write-Output $strgAvg
     }
+
+    # End region
 
     ################# Region Outputs #####################
 
