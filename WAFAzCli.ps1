@@ -761,7 +761,9 @@ foreach ($sub in $AllSubscriptions) {
 
     # Calculate the final average for each pillar
     foreach ($finalAverage in $finalAverageArray) {
-        $finalAverage.Average = $finalAverage.Average / $finalAverage.Count
+        if ($finalAverage.Count -gt 0) {
+            $finalAverage.Average = $finalAverage.Average / $finalAverage.Count
+        }
     }
 
     $WAFResults += $lateReport
