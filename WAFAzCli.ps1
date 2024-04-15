@@ -99,6 +99,7 @@ foreach ($sub in $AllSubscriptions) {
     $DefenderActive = $false
 
     $WAFResults = @()
+    $lateReport = @()
     $WAFResults += "#################################################################################"
     $WAFResults += "WAF Assessment results for subscription $($sub.name)"
     $WAFResults += "#################################################################################"
@@ -417,8 +418,7 @@ foreach ($sub in $AllSubscriptions) {
     $storageTotalAvg = $storageTotalScore / ($strgTotalWeight * $StorageAccounts.Count)
     $roundedStorageTotalAvg = [math]::Round($storageTotalAvg, 1)
 
-    $StorageResults += "Total average score for all storage accounts in subscription $($sub.name) is $roundedStorageTotalAvg %."
-    $StorageResults += ""
+    $lateReport += "Total average score for all storage accounts in subscription $($sub.name) is $roundedStorageTotalAvg %."
 
     if (!$StorageAccounts) {
         $StorageResults += "No storage accounts found for subscription $($sub.name)."
@@ -596,8 +596,7 @@ foreach ($sub in $AllSubscriptions) {
     $kvTotalAvg = $kvScore / ($kvTotalWeight * $Keyvaults.Count)
     $roundedKvTotalAvg = [math]::Round($kvTotalAvg, 1)
 
-    $VaultResults += "Total average score for all key vaults in subscription $($sub.name) is $roundedKvTotalAvg %."
-    $VaultResults += ""
+    $lateReport += "Total average score for all key vaults in subscription $($sub.name) is $roundedKvTotalAvg %."
 
     $WAFResults += $VaultResults
 
@@ -765,6 +764,7 @@ foreach ($sub in $AllSubscriptions) {
         $finalAverage.Average = $finalAverage.Average / $finalAverage.Count
     }
 
+    $WAFResults += $lateReport
     $WAFResults += ""
     $WAFResults += "#################################"
     $WAFResults += "Final Weighted Average by Pillar"
