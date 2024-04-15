@@ -775,6 +775,9 @@ foreach ($sub in $AllSubscriptions) {
     foreach ($finalAverage in $finalAverageArray) {
         $WAFResults += "$($finalAverage.Pillar) has an average score of $($finalAverage.Average) %."
     }
+    $WAFResults += ""
+    $WAFResults += "Note that a score of 0 % may indicate that the evaluated resources have no related checks in that pillar."
+    $WAFResults += "The Custom Checks section is not part of the Microsoft WAF, and is used for additional checks."
 
     # End region
 
