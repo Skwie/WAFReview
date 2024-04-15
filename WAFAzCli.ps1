@@ -724,11 +724,11 @@ foreach ($sub in $AllSubscriptions) {
             if ($pillarCount.Pillar -match $pillar) {
                 $pillarCount.Count++
             }
-        }
-        else {
-            $pillarCounts += [PSCustomObject]@{
-                Pillar = $pillar
-                Count = 1
+            else {
+                $pillarCounts += [PSCustomObject]@{
+                    Pillar = $pillar
+                    Count = 1
+                }
             }
         }
     }
