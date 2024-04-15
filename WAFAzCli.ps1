@@ -741,11 +741,11 @@ foreach ($sub in $AllSubscriptions) {
             if ($finalAverage.Pillar -match $pillar) {
                 $finalAverage.Average = ($finalAverage.Average + $weightedAverage.Split(';')[1])
             }
-        }
-        else {
-            $finalAverageArray += [PSCustomObject]@{
-                Pillar = $pillar
-                Average = $weightedAverage.Split(';')[1]
+            else {
+                $finalAverageArray += [PSCustomObject]@{
+                    Pillar = $pillar
+                    Average = $weightedAverage.Split(';')[1]
+                }
             }
         }
     }
