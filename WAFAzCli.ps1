@@ -172,8 +172,6 @@ foreach ($sub in $AllSubscriptions) {
         $StorageResults += "----- Storage Account - $($strg.name) -----"
         $StorageResults += ""
         
-        ## Reliability Pillar ##
-
         # Turn on soft delete for blob data
         try {
             $BlobProperties = az storage account blob-service-properties show --account-name $strg.name 2> $null 
@@ -311,8 +309,6 @@ foreach ($sub in $AllSubscriptions) {
         ## This can not be evaluated. It is set when a SAS token is generated, and can not be retrieved anymore after that point.
         ## Conformity mentions this as well in their documentation: https://www.trendmicro.com/cloudoneconformity/knowledge-base/azure/StorageAccounts/shared-access-signature-tokens-expire-within-an-hour.html
 
-        ## Security Pillar ##
-
         # Enable Azure Defender for all your storage accounts.
         if ($DefenderActive) {
             $StorageResults += "Good: Defender for Storage is enabled for storage account $($strg.name)."
@@ -322,8 +318,6 @@ foreach ($sub in $AllSubscriptions) {
             $StorageResults += "Bad: Defender for Storage is NOT enabled for storage account $($strg.name)."
             $strgControlArray[10].Result = 0
         }
-
-        ## Cost Optimization ##
 
         # Consider cost savings by reserving data capacity for block blob storage.
         ## This requires access to the container where the blob is stored, requiring a connection string, storage account key or SAS token.
@@ -355,10 +349,6 @@ foreach ($sub in $AllSubscriptions) {
             $strgControlArray[12].Result = 0
         }
         $policy = $null
-
-        ## Operational Excellence ##
-
-        ## Performance Efficiency ##
 
         ## Extra checks ##
 
@@ -613,6 +603,39 @@ foreach ($sub in $AllSubscriptions) {
 
     # End region
 
+    ################# Region Virtual Machines #####################
+
+    # For Virtual Machines we currently assume that VM Scale Sets are not used, and that all VMs are standalone.
+
+    try {
+        $VirtualMachines = az vm list 2> $null | ConvertFrom-Json -Depth 10
+    }
+    catch {
+        Write-Error "Unable to retrieve virtual machines for subscription $($sub.name)." -ErrorAction Continue
+    }
+
+    $VMControls = @(
+        "Check for presence of AppName tag;Security;80"
+        "Check for presence of CI tag;Security;80"
+        "Check for presence of CIA tag;Security;80"
+        "Restrict public IP addresses for Azure Virtual Machines;Security;80"
+        "Restrict IP forwarding for Azure Virtual Machines;Security;80"
+        "Check if VM network interfaces have a Network Security Group attached;Security;80"
+        "Restrict public network access to Azure Virtual Machines;Security;80"
+        "Enable Azure Disk Encryption for Azure Virtual Machines;Security;90"
+        "Enable Endpoint Protection for Azure Virtual Machines;Security;90"
+        "Enable Hybrid Benefit for Azure Virtual Machines;Cost Optimization;60"
+        "Enable automatic upgrades for extensions on Azure Virtual Machines;Operational Excellence;70"
+        "Enable Azure Monitor for Azure Virtual Machines;Operational Excellence;70"
+        "Enable VM Insights for Azure Virtual Machines;Operational Excellence;70"
+        "Enable boot diagnostics for Azure Virtual Machines;Operational Excellence;70"
+        "Enable accelerated networking for Azure Virtual Machines;Performance Efficiency;70"
+    )
+
+
+
+    # End region
+
     ############# Region Score by Pillars ################
 
     $allStrgWeightedAverages = @()
@@ -656,7 +679,7 @@ foreach ($sub in $AllSubscriptions) {
         if ($strgCustomWeightedAverage -notmatch 'NaN') {$allStrgWeightedAverages += "Custom Checks;$strgCustomWeightedAverage"}
 
         foreach ($strgAvg in $allStrgWeightedAverages) {
-            Write-Output $strgAvg
+            $WAFResults += $strgAvg
         }
     }
 
@@ -685,7 +708,7 @@ foreach ($sub in $AllSubscriptions) {
         if ($kvCustomWeightedAverage -notmatch 'NaN') {$allKvWeightedAverages += "Custom Checks;$kvCustomWeightedAverage"}
 
         foreach ($kvAvg in $allKvWeightedAverages) {
-            Write-Output $kvAvg
+            $WAFResults += $kvAvg
         }
     }
 
