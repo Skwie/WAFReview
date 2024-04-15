@@ -714,45 +714,55 @@ foreach ($sub in $AllSubscriptions) {
         $allWeightedAverages += $kvWeightedAverage
     }
 
-    $pillarCounts = @()
+    $finalAverageArray = @(
+        [PSCustomObject]@{
+            Pillar = "Reliability Pillar"
+            Count = 0
+            Average = 0
+        }
+        [PSCustomObject]@{
+            Pillar = "Security Pillar"
+            Count = 0
+            Average = 0
+        }
+        [PSCustomObject]@{
+            Pillar = "Operational Excellence Pillar"
+            Count = 0
+            Average = 0
+        }
+        [PSCustomObject]@{
+            Pillar = "Cost Optimization Pillar"
+            Count = 0
+            Average = 0
+        }
+        [PSCustomObject]@{
+            Pillar = "Performance Efficiency Pillar"
+            Count = 0
+            Average = 0
+        }
+        [PSCustomObject]@{
+            Pillar = "Custom Checks"
+            Count = 0
+            Average = 0
+        }
+    )
+
     # Loop through all weighted averages to get a count for each pillar
     foreach ($weightedAverage in $allWeightedAverages) {
         $pillar = $weightedAverage.Split(';')[0]
-        $weight = $weightedAverage.Split(';')[1]
+        $average = $weightedAverage.Split(';')[1]
 
-        foreach ($pillarCount in $pillarCounts) {
+        foreach ($pillarCount in $finalAverageArray) {
             if ($pillarCount.Pillar -match $pillar) {
                 $pillarCount.Count++
-            }
-            else {
-                $pillarCounts += [PSCustomObject]@{
-                    Pillar = $pillar
-                    Count = 1
-                }
-            }
-        }
-    }
-
-    $finalAverageArray = @()
-    # Combine all the weighted averages for each pillar
-    foreach ($weightedAverage in $allWeightedAverages) {
-        $pillar = $weightedAverage.Split(';')[0]
-        foreach ($finalAverage in $finalAverageArray) {
-            if ($finalAverage.Pillar -match $pillar) {
-                $finalAverage.Average = ($finalAverage.Average + $weightedAverage.Split(';')[1])
-            }
-            else {
-                $finalAverageArray += [PSCustomObject]@{
-                    Pillar = $pillar
-                    Average = $weightedAverage.Split(';')[1]
-                }
+                $pillarCount.Average += $average
             }
         }
     }
 
     # Calculate the final average for each pillar
     foreach ($finalAverage in $finalAverageArray) {
-        $finalAverage.Average = $finalAverage.Average / ($pillarCounts | Where-Object {$_.Pillar -match $finalAverage.Pillar}).Count
+        $finalAverage.Average = $finalAverage.Average / $finalAverage.Count
     }
 
     $WAFResults += ""
@@ -760,7 +770,9 @@ foreach ($sub in $AllSubscriptions) {
     $WAFResults += "Final Weighted Average by Pillar"
     $WAFResults += "#################################"
     $WAFResults += ""
-    $WAFResults += $finalAverageArray
+    foreach ($finalAverage in $finalAverageArray) {
+        $WAFResults += "$($finalAverage.Pillar) has an average score of $($finalAverage.Average) %."
+    }
 
     # End region
 
