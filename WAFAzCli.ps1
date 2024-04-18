@@ -800,7 +800,7 @@ foreach ($sub in $AllSubscriptions) {
         $extensionCount = 0
         $autoUpgradeEnabledCount = 0
         foreach ($resource in $vm.resources) {
-            if ($resource.typePropertiesType -match 'HybridWorkerExtension' -or $resource.typePropertiesType -match 'DependencyAgentLinux'-or $resource.typePropertiesType -match 'DependencyAgentWindows' -or $resource.typePropertiesType -match 'ApplicationHealthLinux' -or $resource.typePropertiesType -match 'ApplicationHealthWindows' -or $resource.typePropertiesType -contains 'GuestAttestation' -or $resource.typePropertiesType -match 'ConfigurationForLinux' -or $resource.typePropertiesType -match 'ConfigurationForWindows' -or $resource.typePropertiesType -match 'KeyVaultForLinux' -or $resource.typePropertiesType -match 'KeyVaultForWindows' -or $resource.typePropertiesType -match 'AzureMonitorLinuxAgent' -or $resource.typePropertiesType -match 'AzureMonitorWindowsAgent' -or $resource.typePropertiesType -match 'OmsAgentForLinux' -or $resource.typePropertiesType -match 'LinuxDiagnostic' -or $resource.typePropertiesType -match 'ServiceFabricLinuxNode') {
+            if ($resource.id -contains 'HybridWorkerExtension' -or $resource.id -contains 'DependencyAgentLinux'-or $resource.id -contains 'DependencyAgentWindows' -or $resource.id -contains 'ApplicationHealthLinux' -or $resource.id -contains 'ApplicationHealthWindows' -or $resource.id -contains 'GuestAttestation' -or $resource.id -contains 'ConfigurationForLinux' -or $resource.id -contains 'ConfigurationForWindows' -or $resource.id -contains 'KeyVaultForLinux' -or $resource.id -contains 'KeyVaultForWindows' -or $resource.id -contains 'AzureMonitorLinuxAgent' -or $resource.id -contains 'AzureMonitorWindowsAgent' -or $resource.id -contains 'OmsAgentForLinux' -or $resource.id -contains 'LinuxDiagnostic' -or $resource.id -contains 'ServiceFabricLinuxNode') {
                 $extensionCount += 1
                 if ($resource.autoUpgradeMinorVersion -match 'True') {
                     $VMResults += "Good: Automatic upgrades are enabled for extension $($resource.name) on VM $($vm.name)"
@@ -822,7 +822,7 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Enable Azure Monitor for Azure Virtual Machines
-        if ($resource.typePropertiesType -match 'AzureMonitorLinuxAgent' -or $resource.typePropertiesType -match 'AzureMonitorWindowsAgent') {
+        if ($resource.id -contains 'AzureMonitorLinuxAgent' -or $resource.id -contains 'AzureMonitorWindowsAgent') {
             $VMResults += "Good: Azure Monitor is enabled for VM $($vm.name)"
             $vmControlArray[10].Result = 100
         }
@@ -832,7 +832,7 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Enable VM Insights for Azure Virtual Machines
-        if (($resource.typePropertiesType -match 'DependencyAgentLinux' -and $resource.typePropertiesType -match 'AzureMonitorLinuxAgent') -or ($resource.typePropertiesType -match 'DependencyAgentWindows' -and $resource.typePropertiesType -match 'AzureMonitorWindowsAgent')) {
+        if (($resource.id -contains 'DependencyAgentLinux' -and $resource.id -contains 'AzureMonitorLinuxAgent') -or ($resource.id -contains 'DependencyAgentWindows' -and $resource.id -contains 'AzureMonitorWindowsAgent')) {
             $VMResults += "Good: VM Insights is enabled for VM $($vm.name)"
             $vmControlArray[11].Result = 100
         }
