@@ -15,6 +15,7 @@
 
 .PARAMETER <OutputToFile>
   Optional. If OutputToFile is true, the script will output the results to a file in the results folder.
+  If the script runs for many subscriptions at once, it is recommended to set this to true, as the output will be too large to read in the terminal.
     
 .OUTPUTS
   The script progressively writes results to the terminal. After performing all checks it should also output a file per subscription listing all controls and scores.
@@ -26,7 +27,8 @@
   Creation Date:  27/03/2024
   
 .EXAMPLE
-  .\WAFAzCli.ps1 -ProdOnly $True -OutputToFile $True
+  .\WAFAzCli.ps1 -ProdOnly $True -OutputToFile $False
+  .\WAFAzCli.ps1 -SubscriptionIds @('b6307584-2248-4e8b-a911-2d7f1bd2613a', 'c405e642-15db-4786-9426-1e23c84d225a') -OutputToFile $True
 
 #>
 
@@ -97,6 +99,10 @@ foreach ($sub in $AllSubscriptions) {
     az account set --subscription $sub.id
 
     $DefenderActive = $false
+
+    Write-Output "Running WAF assessment for subscription $($sub.name)."
+    Write-Output "This may take a while, depending on the amount of resources in the subscription."
+    Write-Output ""
 
     $WAFResults = @()
     $lateReport = @()
@@ -598,6 +604,11 @@ foreach ($sub in $AllSubscriptions) {
 
     $lateReport += "Total average score for all key vaults in subscription $($sub.name) is $roundedKvTotalAvg %."
 
+    if (!$Keyvaults) {
+        $VaultResults += "No key vaults found for subscription $($sub.name)."
+        $VaultResults += ""
+    }
+
     $WAFResults += $VaultResults
 
     # End region
@@ -620,7 +631,6 @@ foreach ($sub in $AllSubscriptions) {
         "Restrict public IP addresses for Azure Virtual Machines;Security;80"
         "Restrict IP forwarding for Azure Virtual Machines;Security;80"
         "Check if VM network interfaces have a Network Security Group attached;Security;80"
-        "Restrict public network access to Azure Virtual Machines;Security;80"
         "Enable Azure Disk Encryption for Azure Virtual Machines;Security;90"
         "Enable Endpoint Protection for Azure Virtual Machines;Security;90"
         "Enable Hybrid Benefit for Azure Virtual Machines;Cost Optimization;60"
@@ -629,17 +639,344 @@ foreach ($sub in $AllSubscriptions) {
         "Enable VM Insights for Azure Virtual Machines;Operational Excellence;70"
         "Enable boot diagnostics for Azure Virtual Machines;Operational Excellence;70"
         "Enable accelerated networking for Azure Virtual Machines;Performance Efficiency;70"
+        "Use Managed Disks for Azure Virtual Machines;Custom;80"
+        "Disable Premium SSD for Azure Virtual Machines;Custom;80"
+        "Enable JIT Access for Azure Virtual Machines;Custom;80"
+        "Enable VM Backup for Azure Virtual Machines;Custom;80"
     )
 
+    $VMResults = @()
+    $VMResults += ""
+    $VMResults += "###########################################"
+    $VMResults += "WAF Assessment Results for Virtual Machines"
+    $VMResults += "###########################################"
 
+    # Query JIT policies once, as they are not VM-specific
+    $jitPolicies = az security jit policy list --query '[*].virtualMachines | []' | ConvertFrom-Json -Depth 10
+
+    foreach ($vm in $VirtualMachines) {
+
+        $vmControlArray = @()
+
+        foreach ($control in $VMControls) {
+            $vmCheck = $control.Split(';')
+            $vmCheckName = $vmCheck[0]
+            $vmCheckPillars = $vmCheck[1].Split(',')
+            $vmCheckWeight = $vmCheck[2]
+    
+            $vmControlArray += [PSCustomObject]@{
+                Name = $vmCheckName
+                Pillars = $vmCheckPillars
+                Weight = $vmCheckWeight
+                Result = $null
+            }
+        }
+
+        # Calculate total weight to calculate weighted average
+        $vmTotalWeight = Get-TotalWeights($vmControlArray)
+
+        $VMResults += ""
+        $VMResults += "----- Key Vault - $($keyvault.name) -----"
+        $VaultResults += ""
+
+        # Check for presence of AppName tag
+        if ($vm.tags.AppName) {
+            $VMResults += "Good: AppName tag is present on VM $($vm.name)"
+            $vmControlArray[0].Result = 100
+        }
+        else {
+            $VMResults += "Bad: AppName tag is NOT present on VM $($vm.name)"
+            $vmControlArray[0].Result = 0
+        }
+
+        # Check for presence of CI tag
+        if ($vm.tags.'Business Application CI') {
+            $VMResults += "Good: Application CI tag is present on VM $($vm.name)"
+            $vmControlArray[1].Result = 100
+        }
+        else {
+            $VMResults += "Bad: Application CI tag is NOT present on VM $($vm.name)"
+            $vmControlArray[1].Result = 0
+        }
+
+        # Check for presence of CIA tag
+        if ($vm.tags.CIA) {
+            $VMResults += "Good: CIA tag is present on VM $($vm.name)"
+            $vmControlArray[2].Result = 100
+        }
+        else {
+            $VMResults += "Bad: CIA tag is NOT present on VM $($vm.name)"
+            $vmControlArray[2].Result = 0
+        }
+
+        # Restrict public IP addresses for Azure Virtual Machines
+        $VmIpAddresses = az vm list-ip-addresses --name $vm.name --resource-group $vm.resourceGroup | ConvertFrom-Json -Depth 10
+        if ($VmIpAddresses.virtualMachine.network.publicIpAddresses) {
+            $VMResults += "Bad: Public IP addresses are present on VM $($vm.name)"
+            $vmControlArray[3].Result = 0
+        }
+        else {
+            $VMResults += "Good: No Public IP addresses are present on VM $($vm.name)"
+            $vmControlArray[3].Result = 100
+        }
+
+        # Restrict IP forwarding for Azure Virtual Machines
+        $VmNICs = az network nic list --query "[?virtualMachine.id == '$($vm.id)']" | ConvertFrom-Json -Depth 10
+        $enableForwarding = $false
+        foreach ($nic in $VmNICs) {
+            if ($nic.enableIpForwarding) {
+                $VMResults += "Bad: IP Forwarding is enabled on NIC $($nic.name) for VM $($vm.name)"
+                $enableForwarding = $true
+            }
+            else {
+                $VMResults += "Good: IP Forwarding is disabled on NIC $($nic.name) for VM $($vm.name)"
+            }
+        }
+        if ($enableForwarding) {
+            $vmControlArray[4].Result = 0
+        }
+        else {
+            $vmControlArray[4].Result = 100
+        }
+
+        # Check if VM network interfaces have a Network Security Group attached
+        # Set to true by default, and only set to false if a NIC is found without a NSG attached.
+        $enableNSG = $true
+        foreach ($nic in $VmNICs) {
+            if ($nic.networkSecurityGroup) {
+                $VMResults += "Good: Network Security Group is attached to NIC $($nic.name) for VM $($vm.name)"
+            }
+            else {
+                $VMResults += "Bad: No Network Security Group is attached to NIC $($nic.name) for VM $($vm.name)"
+                $enableNSG = $false
+            }
+        }
+        if ($enableNSG) {
+            $vmControlArray[5].Result = 100
+        }
+        else {
+            $vmControlArray[5].Result = 0
+        }
+
+        # Enable Azure Disk Encryption for Azure Virtual Machines
+        $DiskEncryption = az vm encryption show --name $vm.name --resource-group $vm.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+        if ($DiskEncryption) {
+            $VMResults += "Good: Disk Encryption is enabled for VM $($vm.name)"
+            $vmControlArray[6].Result = 100
+        }
+        else {
+            $VMResults += "Bad: Disk Encryption is NOT enabled for VM $($vm.name)"
+            $vmControlArray[6].Result = 0
+        }
+
+        # Enable Endpoint Protection for Azure Virtual Machines
+        $enableMDE = $false
+        foreach ($resource in $vm.resources) {
+            if ($resource.name -match 'MDE.Windows') {
+                $enableMDE = $true
+            }
+        }
+        if ($enableMDE) {
+            $VMResults += "Good: Endpoint Protection is enabled for VM $($vm.name)"
+            $vmControlArray[7].Result = 100
+        }
+        else {
+            $VMResults += "Bad: Endpoint Protection is NOT enabled for VM $($vm.name)"
+            $vmControlArray[7].Result = 0
+        }
+
+        # Enable Hybrid Benefit for Azure Virtual Machines
+        $detailedVmInfo = az vm get-instance-view --name $vm.name --resource-group $vm.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+        if ($detailedVmInfo.licenseType -match 'Windows_Server') {
+            $VMResults += "Good: Hybrid Benefit is enabled for VM $($vm.name)"
+            $vmControlArray[8].Result = 100
+        }
+        else {
+            $VMResults += "Informational: Hybrid Benefit is not enabled for VM $($vm.name)"
+            $vmControlArray[8].Result = 50
+        }
+
+        # Enable automatic upgrades for extensions on Azure Virtual Machines
+        $extensionCount = 0
+        $autoUpgradeEnabledCount = 0
+        foreach ($resource in $vm.resources) {
+            if ($resource.typePropertiesType -match 'HybridWorkerExtension' -or $resource.typePropertiesType -match 'DependencyAgentLinux'-or $resource.typePropertiesType -match 'DependencyAgentWindows' -or $resource.typePropertiesType -match 'ApplicationHealthLinux' -or $resource.typePropertiesType -match 'ApplicationHealthWindows' -or $resource.typePropertiesType -contains 'GuestAttestation' -or $resource.typePropertiesType -match 'ConfigurationForLinux' -or $resource.typePropertiesType -match 'ConfigurationForWindows' -or $resource.typePropertiesType -match 'KeyVaultForLinux' -or $resource.typePropertiesType -match 'KeyVaultForWindows' -or $resource.typePropertiesType -match 'AzureMonitorLinuxAgent' -or $resource.typePropertiesType -match 'AzureMonitorWindowsAgent' -or $resource.typePropertiesType -match 'OmsAgentForLinux' -or $resource.typePropertiesType -match 'LinuxDiagnostic' -or $resource.typePropertiesType -match 'ServiceFabricLinuxNode') {
+                $extensionCount += 1
+                if ($resource.autoUpgradeMinorVersion -match 'True') {
+                    $VMResults += "Good: Automatic upgrades are enabled for extension $($resource.name) on VM $($vm.name)"
+                    $autoUpgradeEnabledCount += 1
+                }
+                else {
+                    $VMResults += "Bad: Automatic upgrades are NOT enabled for extension $($resource.name) on VM $($vm.name)"
+                }   
+            }
+        }
+        if ($extensionCount -gt 0) {
+            $percValue = ($extensioncount / 100) * $autoUpgradeEnabledCount
+            $vmControlArray[9].Result = $percValue
+        }
+        else {
+            $VMResults += "Informational: No extensions found on VM $($vm.name)"
+            $vmControlArray[9].Result = 100
+            $vmControlArray[9].Weight = 0
+        }
+
+        # Enable Azure Monitor for Azure Virtual Machines
+        if ($resource.typePropertiesType -match 'AzureMonitorLinuxAgent' -or $resource.typePropertiesType -match 'AzureMonitorWindowsAgent') {
+            $VMResults += "Good: Azure Monitor is enabled for VM $($vm.name)"
+            $vmControlArray[10].Result = 100
+        }
+        else {
+            $VMResults += "Bad: Azure Monitor is NOT enabled for VM $($vm.name)"
+            $vmControlArray[10].Result = 0
+        }
+
+        # Enable VM Insights for Azure Virtual Machines
+        if (($resource.typePropertiesType -match 'DependencyAgentLinux' -and $resource.typePropertiesType -match 'AzureMonitorLinuxAgent') -or ($resource.typePropertiesType -match 'DependencyAgentWindows' -and $resource.typePropertiesType -match 'AzureMonitorWindowsAgent')) {
+            $VMResults += "Good: VM Insights is enabled for VM $($vm.name)"
+            $vmControlArray[11].Result = 100
+        }
+        else {
+            $VMResults += "Bad: VM Insights is NOT enabled for VM $($vm.name)"
+            $vmControlArray[11].Result = 0
+        }
+
+        # Enable boot diagnostics for Azure Virtual Machines
+        if ($vm.diagnosticsProfile.bootDiagnostics.enabled -match 'True') {
+            $VMResults += "Good: Boot Diagnostics are enabled for VM $($vm.name)"
+            $vmControlArray[12].Result = 100
+        }
+        else {
+            $VMResults += "Bad: Boot Diagnostics are NOT enabled for VM $($vm.name)"
+            $vmControlArray[12].Result = 0
+        }
+
+        # Enable accelerated networking for Azure Virtual Machines
+        $accelerationEnabled = $false
+        foreach ($nic in $VmNICs) {
+            if ($nic.enableAcceleratedNetworking) {
+                $VMResults += "Good: Accelerated Networking is enabled on NIC $($nic.name) for VM $($vm.name)"
+                $accelerationEnabled = $true
+            }
+            else {
+                $VMResults += "Bad: Accelerated Networking is NOT enabled on NIC $($nic.name) for VM $($vm.name)"
+            }
+        }
+        if ($accelerationEnabled) {
+            $vmControlArray[13].Result = 100
+        }
+        else {
+            $vmControlArray[13].Result = 0
+        }
+
+        # Use Managed Disks for Azure Virtual Machines
+        $managedDisks = $true
+        foreach ($disk in $vm.storageProfile.osDisk.managedDisk) {
+            if ($disk -match 'null') {
+                $managedDisks = $false
+            }
+        }
+        if ($managedDisks) {
+            $VMResults += "Good: Managed Disks are used for VM $($vm.name)"
+            $vmControlArray[14].Result = 100
+        }
+        else {
+            $VMResults += "Bad: Managed Disks are NOT used for VM $($vm.name)"
+            $vmControlArray[14].Result = 0
+        }
+
+        # Disable Premium SSD for Azure Virtual Machines
+        $premiumSSD = $false
+        foreach ($disk in $vm.storageProfile.osDisk) {
+            if ($disk.managedDisk.storageAccountType -match 'Premium') {
+                $VMResults += "Bad: Premium SSD is used for OS Disk on VM $($vm.name)"
+                $premiumSSD = $true
+            }
+            else {
+                $VMResults += "Good: Standard SSD is used for OS Disk on VM $($vm.name)"
+            }
+        }
+        if ($premiumSSD) {
+            $vmControlArray[15].Result = 0
+        }
+        else {
+            $vmControlArray[15].Result = 100
+        }
+
+        # Enable JIT Access for Azure Virtual Machines
+        if ($jitPolicies) {
+            if ($vm.id -in $jitPolicies) {
+                $VMResults += "Good: JIT Access is enabled for VM $($vm.name)"
+                $vmControlArray[16].Result = 100
+            }
+            else {
+                $VMResults += "Bad: JIT Access is NOT enabled for VM $($vm.name)"
+                $vmControlArray[16].Result = 0
+            }
+        }
+        else{
+            $VMResults += "Bad: No JIT Policies found for VM $($vm.name)"
+            $vmControlArray[16].Result = 0
+        }
+
+        # Enable VM Backup for Azure Virtual Machines
+        $vaults = az backup vault list --query '[*].name' 2> $null | ConvertFrom-Json -Depth 10
+        foreach ($vault in $vaults) {
+            $backupItems = az backup item list --vault-name $vault --resource-group $vm.resourceGroup --query '[*].properties.virtualMachineId' 2> $null | ConvertFrom-Json -Depth 10
+            if ($backupItems -contains $vm.id) {
+                $VMResults += "Good: VM Backup is enabled for VM $($vm.name)"
+                $vmControlArray[17].Result = 100
+            }
+            else {
+                $VMResults += "Bad: VM Backup is NOT enabled for VM $($vm.name)"
+                $vmControlArray[17].Result = 0
+            }
+        }
+
+        # Calculate the weighted average for the virtual machine
+        $vmScore = $vmControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
+        $vmAvgScore = $vmScore / $vmTotalWeight
+        $roundedVmAvg = [math]::Round($vmAvgScore, 1)
+
+        $VMResults += ""
+        $VMResults += "Virtual Machine $($vm.name) has an average score of $roundedVmAvg %."
+        $VMResults += ""
+
+    }
+
+    $vmTotalAvg = $vmScore / ($vmTotalWeight * $VirtualMachines.Count)
+    $roundedVmTotalAvg = [math]::Round($vmTotalAvg, 1)
+
+    $lateReport += "Total average score for all virtual machines in subscription $($sub.name) is $roundedVmTotalAvg %."
+
+    if (!$VirtualMachines) {
+        $VMResults += "No virtual machines found for subscription $($sub.name)."
+        $VMResults += ""
+    }
+
+    $WAFResults += $VMResults
 
     # End region
 
-    ############# Region Score by Pillars ################
+    ################# Region App Services ####################
+
+    try {
+        $AppServices = az webapp list 2> $null | ConvertFrom-Json -Depth 10
+    }
+    catch {
+        Write-Error "Unable to retrieve App Services for subscription $($sub.name)." -ErrorAction Continue
+    }
+
+
+    
+    # End region
+
+    ############### Region Score by Pillars ##################
 
     $allWeightedAverages = @()
     $allStrgWeightedAverages = @()
     $allKvWeightedAverages = @()
+    $allVmWeightedAverages = @()
 
     $strgReliabilityScores = @()
     $strgSecurityScores = @()
@@ -653,6 +990,12 @@ foreach ($sub in $AllSubscriptions) {
     $kvCostOptimizationScores = @()
     $kvPerformanceEfficiencyScores = @()
     $kvCustomScores = @()
+    $vmReliabilityScores = @()
+    $vmSecurityScores = @()
+    $vmOperationalExcellenceScores = @()
+    $vmCostOptimizationScores = @()
+    $vmPerformanceEfficiencyScores = @()
+    $vmCustomScores = @()
 
     if ($StorageAccounts) {
         foreach ($contr in $strgControlArray) {
@@ -706,11 +1049,40 @@ foreach ($sub in $AllSubscriptions) {
 
     }
 
+    if ($VirtualMachines) {
+        foreach ($contr in $vmControlArray) {
+            if ($contr.Pillars -contains 'Reliability') {$vmReliabilityScores += $contr}
+            if ($contr.Pillars -contains 'Security') {$vmSecurityScores += $contr}
+            if ($contr.Pillars -contains 'Operational Excellence') {$vmOperationalExcellenceScores += $contr}
+            if ($contr.Pillars -contains 'Cost Optimization') {$vmCostOptimizationScores += $contr}
+            if ($contr.Pillars -contains 'Performance Efficiency') {$vmPerformanceEfficiencyScores += $contr}
+            if ($contr.Pillars -contains 'Custom') {$vmCustomScores += $contr}
+        }
+
+        $vmReliabilityWeightedAverage = Get-WeightedAverage($vmReliabilityScores)
+        $vmSecurityWeightedAverage = Get-WeightedAverage($vmSecurityScores)
+        $vmOperationalExcellenceWeightedAverage = Get-WeightedAverage($vmOperationalExcellenceScores)
+        $vmCostOptimizationWeightedAverage = Get-WeightedAverage($vmCostOptimizationScores)
+        $vmPerformanceEfficiencyWeightedAverage = Get-WeightedAverage($vmPerformanceEfficiencyScores)
+        $vmCustomWeightedAverage = Get-WeightedAverage($vmCustomScores)
+
+        if ($vmReliabilityWeightedAverage -notmatch 'NaN') {$allVmWeightedAverages += "Reliability Pillar;$vmReliabilityWeightedAverage"}
+        if ($vmSecurityWeightedAverage -notmatch 'NaN') {$allVmWeightedAverages += "Security Pillar;$vmSecurityWeightedAverage"}
+        if ($vmOperationalExcellenceWeightedAverage -notmatch 'NaN') {$allVmWeightedAverages += "Operational Excellence Pillar;$vmOperationalExcellenceWeightedAverage"}
+        if ($vmCostOptimizationWeightedAverage -notmatch 'NaN') {$allVmWeightedAverages += "Cost Optimization Pillar;$vmCostOptimizationWeightedAverage"}
+        if ($vmPerformanceEfficiencyWeightedAverage -notmatch 'NaN') {$allVmWeightedAverages += "Performance Efficiency Pillar;$vmPerformanceEfficiencyWeightedAverage"}
+        if ($vmCustomWeightedAverage -notmatch 'NaN') {$allVmWeightedAverages += "Custom Checks;$vmCustomWeightedAverage"}
+
+    }
+
     foreach ($strgWeightedAverage in $allStrgWeightedAverages) {
         $allWeightedAverages += $strgWeightedAverage
     }
     foreach ($kvWeightedAverage in $allKvWeightedAverages) {
         $allWeightedAverages += $kvWeightedAverage
+    }
+    foreach ($vmWeightedAverage in $allVmWeightedAverages) {
+        $allWeightedAverages += $vmWeightedAverage
     }
 
     $finalAverageArray = @(
@@ -778,6 +1150,7 @@ foreach ($sub in $AllSubscriptions) {
     $WAFResults += ""
     $WAFResults += "Note that a score of 0 % may indicate that the evaluated resources have no related checks in that pillar."
     $WAFResults += "The Custom Checks section is not part of the Microsoft WAF, and is used for additional checks."
+    $WAFResults += ""
 
     # End region
 
