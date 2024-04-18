@@ -101,7 +101,7 @@ foreach ($sub in $AllSubscriptions) {
     $DefenderActive = $false
 
     Write-Output "Running WAF assessment for subscription $($sub.name)."
-    Write-Output "This may take a while, depending on the amount of resources in the subscription."
+    Write-Output "This may take a while, depending on the number of resources in the subscription."
     Write-Output ""
 
     $WAFResults = @()
@@ -652,7 +652,7 @@ foreach ($sub in $AllSubscriptions) {
     $VMResults += "###########################################"
 
     # Query JIT policies once, as they are not VM-specific
-    $jitPolicies = az security jit policy list --query '[*].virtualMachines | []' | ConvertFrom-Json -Depth 10
+    $jitPolicies = az security jit-policy list --query '[*].virtualMachines | []' | ConvertFrom-Json -Depth 10
 
     foreach ($vm in $VirtualMachines) {
 
@@ -676,8 +676,8 @@ foreach ($sub in $AllSubscriptions) {
         $vmTotalWeight = Get-TotalWeights($vmControlArray)
 
         $VMResults += ""
-        $VMResults += "----- Key Vault - $($keyvault.name) -----"
-        $VaultResults += ""
+        $VMResults += "----- Virtual Machine - $($vm.name) -----"
+        $VMResults += ""
 
         # Check for presence of AppName tag
         if ($vm.tags.AppName) {
