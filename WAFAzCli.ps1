@@ -810,11 +810,11 @@ foreach ($sub in $AllSubscriptions) {
             if ($resource.id -match 'HybridWorkerExtension' -or $resource.id -match 'DependencyAgentLinux'-or $resource.id -match 'DependencyAgentWindows' -or $resource.id -match 'ApplicationHealthLinux' -or $resource.id -match 'ApplicationHealthWindows' -or $resource.id -match 'GuestAttestation' -or $resource.id -match 'ConfigurationForLinux' -or $resource.id -match 'ConfigurationForWindows' -or $resource.id -match 'KeyVaultForLinux' -or $resource.id -match 'KeyVaultForWindows' -or $resource.id -match 'AzureMonitorLinuxAgent' -or $resource.id -match 'AzureMonitorWindowsAgent' -or $resource.id -match 'OmsAgentForLinux' -or $resource.id -match 'LinuxDiagnostic' -or $resource.id -match 'ServiceFabricLinuxNode') {
                 $extensionCount += 1
                 if ($resource.autoUpgradeMinorVersion -match 'True') {
-                    $VMResults += "Good: Automatic upgrades are enabled for extension $($resource.name) on VM $($vm.name)"
+                    $VMResults += "Good: Automatic upgrades are enabled for extension $($resource.id.split("/")[-1]) on VM $($vm.name)"
                     $autoUpgradeEnabledCount += 1
                 }
                 else {
-                    $VMResults += "Bad: Automatic upgrades are NOT enabled for extension $($resource.name) on VM $($vm.name)"
+                    $VMResults += "Bad: Automatic upgrades are NOT enabled for extension $($resource.id.split("/")[-1]) on VM $($vm.name)"
                 }   
             }
         }
