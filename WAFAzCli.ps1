@@ -43,7 +43,7 @@ param
     $ProdOnly = $true,
 
     [Parameter(Mandatory=$false)]
-    $OutputToFile = $false
+    $OutputToFile = $true
 )
 
 ################# Region Functions #################
@@ -112,6 +112,9 @@ foreach ($sub in $AllSubscriptions) {
     $WAFResults += ""
 
     ############## Region Storage Accounts ##################
+    
+    Write-Output "Checking Storage Accounts for subscription $($sub.name)..."
+
     try {
         $StorageAccounts = az storage account list 2> $null | ConvertFrom-Json -Depth 10
     }
@@ -437,6 +440,8 @@ foreach ($sub in $AllSubscriptions) {
 
     ################# Region Key Vaults #####################
 
+    Write-Output "Checking Key Vaults for subscription $($sub.name)..."
+
     try {
         $Keyvaults = az keyvault list 2> $null | ConvertFrom-Json -Depth 10
     }
@@ -617,6 +622,8 @@ foreach ($sub in $AllSubscriptions) {
 
     # For Virtual Machines we currently assume that VM Scale Sets are not used, and that all VMs are standalone.
 
+    Write-Output "Checking Virtual Machines for subscription $($sub.name)..."
+    
     try {
         $VirtualMachines = az vm list 2> $null | ConvertFrom-Json -Depth 10
     }
@@ -772,7 +779,7 @@ foreach ($sub in $AllSubscriptions) {
         # Enable Endpoint Protection for Azure Virtual Machines
         $enableMDE = $false
         foreach ($resource in $vm.resources) {
-            if ($resource.name -match 'MDE.Windows') {
+            if ($resource.id -contains 'MDE.Windows') {
                 $enableMDE = $true
             }
         }
@@ -816,7 +823,7 @@ foreach ($sub in $AllSubscriptions) {
             $vmControlArray[9].Result = $percValue
         }
         else {
-            $VMResults += "Informational: No extensions found on VM $($vm.name)"
+            $VMResults += "Informational: No automatically upgradeable extensions found on VM $($vm.name)"
             $vmControlArray[9].Result = 100
             $vmControlArray[9].Weight = 0
         }
@@ -1167,6 +1174,8 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     Write-Output $WAFResults
+
+    Write-Output "Results may be truncated as they do not fit in the terminal. For full results, please check the output file."
 
     # End region
 }
