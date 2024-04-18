@@ -779,7 +779,7 @@ foreach ($sub in $AllSubscriptions) {
         # Enable Endpoint Protection for Azure Virtual Machines
         $enableMDE = $false
         foreach ($resource in $vm.resources) {
-            if ($resource.id -contains 'MDE.Windows') {
+            if ($resource.id -match 'MDE.Windows') {
                 $enableMDE = $true
             }
         }
@@ -807,7 +807,7 @@ foreach ($sub in $AllSubscriptions) {
         $extensionCount = 0
         $autoUpgradeEnabledCount = 0
         foreach ($resource in $vm.resources) {
-            if ($resource.id -contains 'HybridWorkerExtension' -or $resource.id -contains 'DependencyAgentLinux'-or $resource.id -contains 'DependencyAgentWindows' -or $resource.id -contains 'ApplicationHealthLinux' -or $resource.id -contains 'ApplicationHealthWindows' -or $resource.id -contains 'GuestAttestation' -or $resource.id -contains 'ConfigurationForLinux' -or $resource.id -contains 'ConfigurationForWindows' -or $resource.id -contains 'KeyVaultForLinux' -or $resource.id -contains 'KeyVaultForWindows' -or $resource.id -contains 'AzureMonitorLinuxAgent' -or $resource.id -contains 'AzureMonitorWindowsAgent' -or $resource.id -contains 'OmsAgentForLinux' -or $resource.id -contains 'LinuxDiagnostic' -or $resource.id -contains 'ServiceFabricLinuxNode') {
+            if ($resource.id -match 'HybridWorkerExtension' -or $resource.id -match 'DependencyAgentLinux'-or $resource.id -match 'DependencyAgentWindows' -or $resource.id -match 'ApplicationHealthLinux' -or $resource.id -match 'ApplicationHealthWindows' -or $resource.id -match 'GuestAttestation' -or $resource.id -match 'ConfigurationForLinux' -or $resource.id -match 'ConfigurationForWindows' -or $resource.id -match 'KeyVaultForLinux' -or $resource.id -match 'KeyVaultForWindows' -or $resource.id -match 'AzureMonitorLinuxAgent' -or $resource.id -match 'AzureMonitorWindowsAgent' -or $resource.id -match 'OmsAgentForLinux' -or $resource.id -match 'LinuxDiagnostic' -or $resource.id -match 'ServiceFabricLinuxNode') {
                 $extensionCount += 1
                 if ($resource.autoUpgradeMinorVersion -match 'True') {
                     $VMResults += "Good: Automatic upgrades are enabled for extension $($resource.name) on VM $($vm.name)"
@@ -829,7 +829,13 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Enable Azure Monitor for Azure Virtual Machines
-        if ($resource.id -contains 'AzureMonitorLinuxAgent' -or $resource.id -contains 'AzureMonitorWindowsAgent') {
+        $azMonEnabled = $false
+        foreach ($resource in $vm.resources) {
+            if ($resource.id -match 'AzureMonitorLinuxAgent' -or $resource.id -match 'AzureMonitorWindowsAgent') {
+                $azMonEnabled = $true
+            }
+        }
+        if ($azMonEnabled) {
             $VMResults += "Good: Azure Monitor is enabled for VM $($vm.name)"
             $vmControlArray[10].Result = 100
         }
@@ -839,7 +845,16 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Enable VM Insights for Azure Virtual Machines
-        if (($resource.id -contains 'DependencyAgentLinux' -and $resource.id -contains 'AzureMonitorLinuxAgent') -or ($resource.id -contains 'DependencyAgentWindows' -and $resource.id -contains 'AzureMonitorWindowsAgent')) {
+        $VMInsightsEnabled = $false
+        foreach ($resource in $vm.resources) {
+            if ($resource.id -match 'DependencyAgentLinux' -and $resource.id -match 'AzureMonitorLinuxAgent') {
+                $VMInsightsEnabled = $true
+            }
+            elseif ($resource.id -match 'DependencyAgentWindows' -and $resource.id -match 'AzureMonitorWindowsAgent') {
+                $VMInsightsEnabled = $true
+            }
+        }
+        if ($VMInsightsEnabled) {
             $VMResults += "Good: VM Insights is enabled for VM $($vm.name)"
             $vmControlArray[11].Result = 100
         }
