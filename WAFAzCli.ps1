@@ -632,9 +632,9 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     $VMControls = @(
-        "Check for presence of AppName tag;Security;80"
-        "Check for presence of CI tag;Security;80"
-        "Check for presence of CIA tag;Security;80"
+        "Check for presence of AppName tag;Custom;80"
+        "Check for presence of CI tag;Custom;80"
+        "Check for presence of CIA tag;Custom;80"
         "Restrict public IP addresses for Azure Virtual Machines;Security;80"
         "Restrict IP forwarding for Azure Virtual Machines;Security;80"
         "Check if VM network interfaces have a Network Security Group attached;Security;80"
@@ -989,8 +989,454 @@ foreach ($sub in $AllSubscriptions) {
         Write-Error "Unable to retrieve App Services for subscription $($sub.name)." -ErrorAction Continue
     }
 
+    # Define controls for App Services
+    $AppServiceControls = @(
+        "Consider disabling ARR Affinity for your App Service;Reliability;60"
+        "Enable Always On to ensure Web Jobs run reliably;Reliability;80"
+        "Access the on-prem database using private connections like Azure VPN or Express Route;Reliability;90"
+        "Set up backup and restore;Reliability;90"
+        "Understand IP Address deprecation impact;Reliability;70"
+        "Ensure App Service Environments (ASE) are deployed in highly available configurations across Availability Zones;Reliability;80"
+        "Plan for scaling out the ASE cluster;Reliability;35"
+        "Use Deployment slots for resilient code deployments;Reliability,Operational Excellence;75"
+        "Use Run From Package to avoid deployment conflicts;Reliability,Operational Excellence;80"
+        "Use Basic or higher plans with two or more worker instances for high availability;Reliability,Operational Excellence;60"
+        "Enable Health check to identify non-responsive workers;Reliability,Operational Excellence;85"
+        "Enable Autoscale to ensure adequate resources are available to service requests;Reliability,Operational Excellence;60"
+        "Enable Local Cache to reduce dependencies on cluster file servers;Reliability,Operational Excellence;50"
+        "Enable Application Insights Alerts to signal fault conditions;Reliability,Operational Excellence;80"
+        "Use App Service Premium v3 plan over the Premium v2 plan;Cost Optimization;75"
+        "Use a scale-out and scale-in rule combination to optimize costs;Cost Optimization;80"
+        "Check for Latest Version of .NET Framework;Custom;80"
+        "Check for latest version of Java;Custom;80"
+        "Check for Latest Version of PHP;Custom;80"
+        "Check for Latest Version of Python;Custom;80"
+        "Check for sufficient backup retention period;Custom;80"
+        "Check for TLS protocol version;Custom;90"
+        "Check that Azure App Service is using the latest version of HTTP;Custom;80"
+        "Check if the Azure App Service requests incoming client certificates;Custom;80"
+        "Disable plain FTP deployment;Custom;80"
+        "Disable remote debugging;Custom;80"
+        "Enable App Service Authentication;Custom;80"
+        "Enable FTPS-only access;Custom;80"
+        "Enable HTTPS-only traffic;Custom;80"
+        "Enable registration with Microsoft Entra ID;Custom;80"
+    )
 
+    $AppServiceResults = @()
+    $AppServiceResults += ""
+    $AppServiceResults += "#######################################"
+    $AppServiceResults += "WAF Assessment Results for App Services"
+    $AppServiceResults += "#######################################"
+
+    foreach ($appservice in $AppServices) {
+
+        $appServiceControlArray = @()
+
+        foreach ($control in $AppServiceControls) {
+            $appServiceCheck = $control.Split(';')
+            $appServiceCheckName = $appServiceCheck[0]
+            $appServiceCheckPillars = $appServiceCheck[1].Split(',')
+            $appServiceCheckWeight = $appServiceCheck[2]
     
+            $appServiceControlArray += [PSCustomObject]@{
+                Name = $appServiceCheckName
+                Pillars = $appServiceCheckPillars
+                Weight = $appServiceCheckWeight
+                Result = $null
+            }
+        }
+
+        # Calculate total weight to calculate weighted average
+        $appServiceTotalWeight = Get-TotalWeights($appServiceControlArray)
+
+        $AppServiceResults += ""
+        $AppServiceResults += "----- App Service - $($appservice.name) -----"
+        $AppServiceResults += ""
+
+        # Consider disabling ARR Affinity for your App Service
+        $appDetails = az webapp show --name $appservice.name --resource-group $appservice.resourceGroup | ConvertFrom-Json -Depth 10
+        if ($appDetails.clientAffinityEnabled -match 'False') {
+            $AppServiceResults += "Good: ARR Affinity is disabled for App Service $($appservice.name)"
+            $appServiceControlArray[0].Result = 100
+        }
+        else {
+            $AppServiceResults += "Bad: ARR Affinity is enabled for App Service $($appservice.name)"
+            $appServiceControlArray[0].Result = 0
+        }
+
+        # Enable Always On to ensure Web Jobs run reliably
+        if ($appDetails.alwaysOn -match 'True') {
+            $AppServiceResults += "Good: Always On is enabled for App Service $($appservice.name)"
+            $appServiceControlArray[1].Result = 100
+        }
+        else {
+            $AppServiceResults += "Bad: Always On is NOT enabled for App Service $($appservice.name)"
+            $appServiceControlArray[1].Result = 0
+        }
+
+        # Access the on-prem database using private connections like Azure VPN or Express Route
+        if ($appDetails.publicNetworkAccess -match 'Disabled') {
+            $AppServiceResults += "Good: Public Network Access is disabled for App Service $($appservice.name)"
+            $appServiceControlArray[2].Result = 100
+        }
+        else {
+            $AppServiceResults += "Bad: Public Network Access is enabled for App Service $($appservice.name)"
+            $appServiceControlArray[2].Result = 0
+        }
+
+        # Set up backup and restore
+        $backupConf = az webapp config backup show --resource-group $appservice.resourceGroup --webapp-name $appservice.name 2> $null | ConvertFrom-Json -Depth 10
+        if (!$backupConf) {
+            $AppServiceResults += "Bad: Backup and Restore is NOT configured for App Service $($appservice.name)"
+            $appServiceControlArray[3].Result = 0
+        }
+        else {
+            $AppServiceResults += "Good: Backup and Restore is configured for App Service $($appservice.name)"
+            $appServiceControlArray[3].Result = 100
+        }
+
+        # Understand IP Address deprecation impact
+        if ($appDetails.outboundIpAddresses -match 'null') {
+            $AppServiceResults += "Bad: Outbound IP Addresses are deprecated for App Service $($appservice.name)"
+            $appServiceControlArray[4].Result = 0
+        }
+        else {
+            $AppServiceResults += "Good: Outbound IP Addresses are not deprecated for App Service $($appservice.name)"
+            $appServiceControlArray[4].Result = 100
+        }
+
+        # Ensure App Service Environments (ASE) are deployed in highly available configurations across Availability Zones
+        $aseDetails = az appservice plan show --id $appDetails.appServicePlanId --resource-group $appservice.resourceGroup | ConvertFrom-Json -Depth 10
+        if ($aseDetails.properties.zoneRedundant -match 'True') {
+            $AppServiceResults += "Good: ASE is deployed in a highly available configuration across Availability Zones for App Service $($appservice.name)"
+            $appServiceControlArray[5].Result = 100
+        }
+        else {
+            $AppServiceResults += "Bad: ASE is NOT deployed in a highly available configuration across Availability Zones for App Service $($appservice.name)"
+            $appServiceControlArray[5].Result = 0
+        }
+
+        # Plan for scaling out the ASE cluster
+        if ($aseDetails.sku.capacity -gt 1) {
+            $AppServiceResults += "Informational: ASE cluster is scaled out for App Service $($appservice.name)"
+            $appServiceControlArray[6].Result = 50
+        }
+        else {
+            $AppServiceResults += "Informational: ASE cluster is NOT scaled out for App Service $($appservice.name)"
+            $appServiceControlArray[6].Result = 50
+        }
+
+        # Use Deployment slots for resilient code deployments
+        $deploymentSlots = az webapp deployment slot list --name $appservice.name --resource-group $appservice.resourceGroup --query '[*].name' | ConvertFrom-Json -Depth 10
+        if ($deploymentSlots) {
+            $AppServiceResults += "Good: Deployment slots are used for App Service $($appservice.name)"
+            $appServiceControlArray[7].Result = 100
+        }
+        else {
+            $AppServiceResults += "Bad: No Deployment slots are used for App Service $($appservice.name)"
+            $appServiceControlArray[7].Result = 0
+        }
+
+        # Use Run From Package to avoid deployment conflicts
+        $appSettings = az webapp config appsettings list --name $appservice.name --resource-group $appservice.resourceGroup | ConvertFrom-Json -Depth 10
+        if (($appSettings -match 'WEBSITE_RUN_FROM_PACKAGE').slotSetting -match 'True') {
+            $AppServiceResults += "Good: Run From Package is used for App Service $($appservice.name)"
+            $appServiceControlArray[8].Result = 100
+        }
+        else {
+            $AppServiceResults += "Bad: Run From Package is NOT used for App Service $($appservice.name)"
+            $appServiceControlArray[8].Result = 0
+        }
+
+        # Use Basic or higher plans with two or more worker instances for high availability
+        if ($aseDetails.sku.capacity -ge 2) {
+            if ($aseDetails.sku.tier -match 'Basic' -or $aseDetails.sku.tier -match 'Standard' -or $aseDetails.sku.tier -match 'Premium') {
+                $AppServiceResults += "Good: Basic or higher plans with two or more worker instances are used for App Service $($appservice.name)"
+                $appServiceControlArray[9].Result = 100
+            }
+            else {
+                $AppServiceResults += "Bad: Basic or higher plans with two or more worker instances are NOT used for App Service $($appservice.name)"
+                $appServiceControlArray[9].Result = 0
+            }
+        }
+        else {
+            $AppServiceResults += "Informational: Only one worker instance is active for $($appservice.name), so the app service plan is not evaluated."
+            $appServiceControlArray[9].Result = 0
+            $appServiceControlArray[9].Weight = 0
+        }
+
+        # Enable Health check to identify non-responsive workers
+        if ($appDetails.healthCheckPath) {
+            $AppServiceResults += "Good: Health check is enabled for App Service $($appservice.name)"
+            $appServiceControlArray[10].Result = 100
+        }
+        else {
+            $AppServiceResults += "Bad: Health check is NOT enabled for App Service $($appservice.name)"
+            $appServiceControlArray[10].Result = 0
+        }
+
+        # Enable Autoscale to ensure adequate resources are available to service requests
+        $autoscale = az monitor autoscale list --resource-group $appservice.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+        if ($autoscale.targetResourceUri -match $appservice.id -and $autoscale.enabled -match 'True') {
+            $AppServiceResults += "Good: Autoscale is enabled for App Service $($appservice.name)"
+            $appServiceControlArray[11].Result = 100
+        }
+        else {
+            $AppServiceResults += "Bad: Autoscale is NOT enabled for App Service $($appservice.name)"
+            $appServiceControlArray[11].Result = 0
+        }
+
+        # Enable Local Cache to reduce dependencies on cluster file servers
+        if ($aseDetails.sku.capacity -eq 1) {
+            if ($appSettings -match 'WEBSITE_LOCAL_CACHE_OPTION') {
+                $AppServiceResults += "Good: Local Cache is enabled for App Service with single instance $($appservice.name)"
+                $appServiceControlArray[12].Result = 100
+            }
+            else {
+                $AppServiceResults += "Bad: Local Cache is NOT enabled for App Service with single instance $($appservice.name)"
+                $appServiceControlArray[12].Result = 0
+            }
+        }
+        else {
+            if ($appSettings -match 'WEBSITE_LOCAL_CACHE_OPTION') {
+                $AppServiceResults += "Bad: Local Cache is enabled for App Service with more than 1 instance $($appservice.name)"
+                $appServiceControlArray[12].Result = 0
+            }
+            else {
+                $AppServiceResults += "Good: Local Cache is not enabled for App Service with more than 1 instance $($appservice.name)"
+                $appServiceControlArray[12].Result = 100
+            }
+        }
+
+        # Enable Application Insights Alerts to signal fault conditions
+        if ($appSettings -match 'APPLICATIONINSIGHTS_CONNECTION_STRING' -or $appSettings -match 'APPINSIGHTS_INSTRUMENTATIONKEY') {
+            $AppServiceResults += "Good: Application Insights Alerts are enabled for App Service $($appservice.name)"
+            $appServiceControlArray[13].Result = 100
+        }
+        else {
+            $AppServiceResults += "Bad: Application Insights Alerts are NOT enabled for App Service $($appservice.name)"
+            $appServiceControlArray[13].Result = 0
+        }
+
+        # Use App Service Premium v3 plan over the Premium v2 plan
+        if ($aseDetails.sku.tier -match 'PremiumV3') {
+            $AppServiceResults += "Good: Premium v3 plan is used for App Service $($appservice.name)"
+            $appServiceControlArray[14].Result = 100
+        }
+        elseif ($aseDetails.sku.tier -match 'PremiumV2') {
+            $AppServiceResults += "Bad: Premium v2 plan is used for App Service $($appservice.name), while v3 is cheaper"
+            $appServiceControlArray[14].Result = 0
+        }
+        else {
+            $AppServiceResults += "Informational: App Service plan is not Premium for App Service $($appservice.name)"
+            $appServiceControlArray[14].Result = 0
+            $appServiceControlArray[14].Weight = 0
+        }
+
+        # Use a scale-out and scale-in rule combination to optimize costs
+        if ($autoscale.profiles.rules.scaleaction.direction -match 'Increase' -and $autoscale.profiles.rules.scaleaction.direction -match 'Decrease') {
+            $AppServiceResults += "Good: Scale-out and Scale-in rules are used for App Service $($appservice.name)"
+            $appServiceControlArray[15].Result = 100
+        }
+        else {
+            $AppServiceResults += "Bad: No Scale-out and Scale-in rules are used for App Service $($appservice.name)"
+            $appServiceControlArray[15].Result = 0
+        }
+
+        # Check for Latest Version of .NET Framework
+        if ($appSettings.netFrameworkVersion) {
+            if ($appSettings.netFrameworkVersion -match 'v4.8') {
+                $AppServiceResults += "Good: Latest version of .NET Framework is used for App Service $($appservice.name)"
+                $appServiceControlArray[16].Result = 100
+            }
+            else {
+                $AppServiceResults += "Bad: Latest version of .NET Framework is NOT used for App Service $($appservice.name)"
+                $appServiceControlArray[16].Result = 0
+            }
+        }
+        else {
+            $AppServiceResults += "Informational: .NET Framework version is not set for App Service $($appservice.name)"
+            $appServiceControlArray[16].Result = 0
+            $appServiceControlArray[16].Weight = 0
+        }
+
+        # Check for latest version of Java
+        if ($appSettings.javaVersion) {
+            if ($appSettings.javaVersion -match '1.8') {
+                $AppServiceResults += "Good: Latest version of Java is used for App Service $($appservice.name)"
+                $appServiceControlArray[17].Result = 100
+            }
+            else {
+                $AppServiceResults += "Bad: Latest version of Java is NOT used for App Service $($appservice.name)"
+                $appServiceControlArray[17].Result = 0
+            }
+        }
+        else {
+            $AppServiceResults += "Informational: Java version is not set for App Service $($appservice.name)"
+            $appServiceControlArray[17].Result = 0
+            $appServiceControlArray[17].Weight = 0
+        }
+
+        # Check for Latest Version of PHP
+        if ($appSettings.phpVersion) {
+            if ($appSettings.phpVersion -match '8.2') {
+                $AppServiceResults += "Good: Latest version of PHP is used for App Service $($appservice.name)"
+                $appServiceControlArray[18].Result = 100
+            }
+            else {
+                $AppServiceResults += "Bad: Latest version of PHP is NOT used for App Service $($appservice.name)"
+                $appServiceControlArray[18].Result = 0
+            }
+        }
+        else {
+            $AppServiceResults += "Informational: PHP version is not set for App Service $($appservice.name)"
+            $appServiceControlArray[18].Result = 0
+            $appServiceControlArray[18].Weight = 0
+        }
+
+        # Check for Latest Version of Python
+        if ($appSettings.pythonVersion) {
+            if ($appSettings.pythonVersion -match '3.12') {
+                $AppServiceResults += "Good: Latest version of Python is used for App Service $($appservice.name)"
+                $appServiceControlArray[19].Result = 100
+            }
+            else {
+                $AppServiceResults += "Bad: Latest version of Python is NOT used for App Service $($appservice.name)"
+                $appServiceControlArray[19].Result = 0
+            }
+        }
+        else {
+            $AppServiceResults += "Informational: Python version is not set for App Service $($appservice.name)"
+            $appServiceControlArray[19].Result = 0
+            $appServiceControlArray[19].Weight = 0
+        }
+
+        # Check for sufficient backup retention period
+        if ($backupConf.retentionPeriodInDays -ge 7) {
+            $AppServiceResults += "Good: Backup retention period is sufficient for App Service $($appservice.name)"
+            $appServiceControlArray[20].Result = 100
+        }
+        else {
+            $AppServiceResults += "Bad: Backup retention period is NOT sufficient for App Service $($appservice.name)"
+            $appServiceControlArray[20].Result = 0
+        }
+
+        # Check for TLS protocol version
+        if ($appSettings.minTlsVersion -match '1.2') {
+            $AppServiceResults += "Good: TLS protocol version is set to 1.2 for App Service $($appservice.name)"
+            $appServiceControlArray[21].Result = 100
+        }
+        else {
+            $AppServiceResults += "Bad: TLS protocol version is NOT set to 1.2 for App Service $($appservice.name)"
+            $appServiceControlArray[21].Result = 0
+        }
+
+        # Check that Azure App Service is using the latest version of HTTP
+        if ($appSettings.http20Enabled -match 'True') {
+            $AppServiceResults += "Good: Latest version of HTTP is used for App Service $($appservice.name)"
+            $appServiceControlArray[22].Result = 100
+        }
+        else {
+            $AppServiceResults += "Bad: Latest version of HTTP is NOT used for App Service $($appservice.name)"
+            $appServiceControlArray[22].Result = 0
+        }
+
+        # Check if the Azure App Service requests incoming client certificates
+        if ($appDetails.clientCertEnabled -match 'True') {
+            $AppServiceResults += "Good: Incoming client certificates are requested for App Service $($appservice.name)"
+            $appServiceControlArray[23].Result = 100
+        }
+        else {
+            $AppServiceResults += "Bad: Incoming client certificates are NOT requested for App Service $($appservice.name)"
+            $appServiceControlArray[23].Result = 0
+        }
+
+        # Disable plain FTP deployment
+        if ($appSettings.ftpState -match 'FtpsOnly' -or $appSettings.ftpState -match 'Disabled') {
+            $AppServiceResults += "Good: FTP access is disabled for App Service $($appservice.name)"
+            $appServiceControlArray[24].Result = 100
+        }
+        else {
+            $AppServiceResults += "Bad: FTP access is NOT disabled for App Service $($appservice.name)"
+            $appServiceControlArray[24].Result = 0
+        }
+
+        # Disable remote debugging
+        if ($appSettings.remoteDebuggingEnabled -match 'False') {
+            $AppServiceResults += "Good: Remote debugging is disabled for App Service $($appservice.name)"
+            $appServiceControlArray[25].Result = 100
+        }
+        else {
+            $AppServiceResults += "Bad: Remote debugging is NOT disabled for App Service $($appservice.name)"
+            $appServiceControlArray[25].Result = 0
+        }
+
+        # Enable App Service Authentication
+        $appAuth = az webapp auth show --ids $appservice.id 2> $null | ConvertFrom-Json -Depth 10
+        if ($appAuth.enabled -match 'True') {
+            $AppServiceResults += "Good: App Service Authentication is enabled for App Service $($appservice.name)"
+            $appServiceControlArray[26].Result = 100
+        }
+        else {
+            $AppServiceResults += "Bad: App Service Authentication is NOT enabled for App Service $($appservice.name)"
+            $appServiceControlArray[26].Result = 0
+        }
+
+        # Enable FTPS-only access
+        if ($appSettings.ftpState -match 'FtpsOnly') {
+            $AppServiceResults += "Good: FTPS-only access is enabled for App Service $($appservice.name)"
+            $appServiceControlArray[27].Result = 100
+        }
+        else {
+            $AppServiceResults += "Bad: FTPS-only access is NOT enabled for App Service $($appservice.name)"
+            $appServiceControlArray[27].Result = 0
+        }
+
+        # Enable HTTPS-only traffic
+        if ($appDetails.httpsOnly -match 'True') {
+            $AppServiceResults += "Good: HTTPS-only traffic is enabled for App Service $($appservice.name)"
+            $appServiceControlArray[28].Result = 100
+        }
+        else {
+            $AppServiceResults += "Bad: HTTPS-only traffic is NOT enabled for App Service $($appservice.name)"
+            $appServiceControlArray[28].Result = 0
+        }
+
+        # Enable registration with Microsoft Entra ID
+        $appIdentity = az webapp identity show --name $appservice.name --resource-group $appservice.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+        if ($appIdentity.type -match 'SystemAssigned') {
+            $AppServiceResults += "Good: Registration with Microsoft Entra ID is enabled for App Service $($appservice.name)"
+            $appServiceControlArray[29].Result = 100
+        }
+        else {
+            $AppServiceResults += "Bad: Registration with Microsoft Entra ID is NOT enabled for App Service $($appservice.name)"
+            $appServiceControlArray[29].Result = 0
+        }
+
+        # Calculate the weighted average for the app service
+        $appServiceScore = $appServiceControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
+        $appServiceAvgScore = $appServiceScore / $appServiceTotalWeight
+        $roundedAppServiceAvg = [math]::Round($appServiceAvgScore, 1)
+
+        $AppServiceResults += ""
+        $AppServiceResults += "App Service $($appservice.name) has an average score of $roundedAppServiceAvg %."
+        $AppServiceResults += ""
+
+    }
+
+    $AppServiceTotalAvg = $appServiceScore / ($appServiceTotalWeight * $AppServices.Count)
+    $roundedAppServiceTotalAvg = [math]::Round($AppServiceTotalAvg, 1)
+
+    $lateReport += "Total average score for all App Services in subscription $($sub.name) is $roundedAppServiceTotalAvg %."
+
+    if (!$AppServices) {
+        $AppServiceResults += "No App Services found for subscription $($sub.name)."
+        $AppServiceResults += ""
+    }
+
+    $WAFResults += $AppServiceResults
+
     # End region
 
     ############### Region Score by Pillars ##################
@@ -999,6 +1445,7 @@ foreach ($sub in $AllSubscriptions) {
     $allStrgWeightedAverages = @()
     $allKvWeightedAverages = @()
     $allVmWeightedAverages = @()
+    $allAppServiceWeightedAverages = @()
 
     $strgReliabilityScores = @()
     $strgSecurityScores = @()
@@ -1018,6 +1465,12 @@ foreach ($sub in $AllSubscriptions) {
     $vmCostOptimizationScores = @()
     $vmPerformanceEfficiencyScores = @()
     $vmCustomScores = @()
+    $appServiceReliabilityScores = @()
+    $appServiceSecurityScores = @()
+    $appServiceOperationalExcellenceScores = @()
+    $appServiceCostOptimizationScores = @()
+    $appServicePerformanceEfficiencyScores = @()
+    $appServiceCustomScores = @()
 
     if ($StorageAccounts) {
         foreach ($contr in $strgControlArray) {
@@ -1097,6 +1550,32 @@ foreach ($sub in $AllSubscriptions) {
 
     }
 
+    if ($AppServices) {
+        foreach ($contr in $appServiceControlArray) {
+            if ($contr.Pillars -contains 'Reliability') {$appServiceReliabilityScores += $contr}
+            if ($contr.Pillars -contains 'Security') {$appServiceSecurityScores += $contr}
+            if ($contr.Pillars -contains 'Operational Excellence') {$appServiceOperationalExcellenceScores += $contr}
+            if ($contr.Pillars -contains 'Cost Optimization') {$appServiceCostOptimizationScores += $contr}
+            if ($contr.Pillars -contains 'Performance Efficiency') {$appServicePerformanceEfficiencyScores += $contr}
+            if ($contr.Pillars -contains 'Custom') {$appServiceCustomScores += $contr}
+        }
+
+        $appServiceReliabilityWeightedAverage = Get-WeightedAverage($appServiceReliabilityScores)
+        $appServiceSecurityWeightedAverage = Get-WeightedAverage($appServiceSecurityScores)
+        $appServiceOperationalExcellenceWeightedAverage = Get-WeightedAverage($appServiceOperationalExcellenceScores)
+        $appServiceCostOptimizationWeightedAverage = Get-WeightedAverage($appServiceCostOptimizationScores)
+        $appServicePerformanceEfficiencyWeightedAverage = Get-WeightedAverage($appServicePerformanceEfficiencyScores)
+        $appServiceCustomWeightedAverage = Get-WeightedAverage($appServiceCustomScores)
+
+        if ($appServiceReliabilityWeightedAverage -notmatch 'NaN') {$allAppServiceWeightedAverages += "Reliability Pillar;$appServiceReliabilityWeightedAverage"}
+        if ($appServiceSecurityWeightedAverage -notmatch 'NaN') {$allAppServiceWeightedAverages += "Security Pillar;$appServiceSecurityWeightedAverage"}
+        if ($appServiceOperationalExcellenceWeightedAverage -notmatch 'NaN') {$allAppServiceWeightedAverages += "Operational Excellence Pillar;$appServiceOperationalExcellenceWeightedAverage"}
+        if ($appServiceCostOptimizationWeightedAverage -notmatch 'NaN') {$allAppServiceWeightedAverages += "Cost Optimization Pillar;$appServiceCostOptimizationWeightedAverage"}
+        if ($appServicePerformanceEfficiencyWeightedAverage -notmatch 'NaN') {$allAppServiceWeightedAverages += "Performance Efficiency Pillar;$appServicePerformanceEfficiencyWeightedAverage"}
+        if ($appServiceCustomWeightedAverage -notmatch 'NaN') {$allAppServiceWeightedAverages += "Custom Checks;$appServiceCustomWeightedAverage"}
+
+    }
+
     foreach ($strgWeightedAverage in $allStrgWeightedAverages) {
         $allWeightedAverages += $strgWeightedAverage
     }
@@ -1105,6 +1584,9 @@ foreach ($sub in $AllSubscriptions) {
     }
     foreach ($vmWeightedAverage in $allVmWeightedAverages) {
         $allWeightedAverages += $vmWeightedAverage
+    }
+    foreach ($appServiceWeightedAverage in $allAppServiceWeightedAverages) {
+        $allWeightedAverages += $appServiceWeightedAverage
     }
 
     $finalAverageArray = @(
@@ -1179,10 +1661,6 @@ foreach ($sub in $AllSubscriptions) {
     ################# Region Outputs #####################
 
     # This script currently writes results to the terminal, and optionally creates a txt log file.
-    # ToDo: output results as csv to be used with MS tool.
-    # Perhaps even integrate MS tool into this script? Need to check under which license it is released.
-
-
     
     if ($OutputToFile) {
         $WAFResults | Out-File -FilePath ( New-Item -Path ".\results\$($sub.name).txt" -Force )
