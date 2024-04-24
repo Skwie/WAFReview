@@ -943,16 +943,20 @@ foreach ($sub in $AllSubscriptions) {
 
         # Enable VM Backup for Azure Virtual Machines
         $vaults = az backup vault list --query '[*].name' 2> $null | ConvertFrom-Json -Depth 10
+        $vmBackedUp = $false
         foreach ($vault in $vaults) {
             $backupItems = az backup item list --vault-name $vault --resource-group $vm.resourceGroup --query '[*].properties.virtualMachineId' 2> $null | ConvertFrom-Json -Depth 10
             if ($backupItems -contains $vm.id) {
-                $VMResults += "Good: VM Backup is enabled for VM $($vm.name)"
-                $vmControlArray[17].Result = 100
+                $vmBackedUp = $true
             }
-            else {
-                $VMResults += "Bad: VM Backup is NOT enabled for VM $($vm.name)"
-                $vmControlArray[17].Result = 0
-            }
+        }
+        if ($vmBackedUp) {
+            $VMResults += "Good: VM Backup is enabled for VM $($vm.name)"
+            $vmControlArray[17].Result = 100
+        }
+        else {
+            $VMResults += "Bad: VM Backup is NOT enabled for VM $($vm.name)"
+            $vmControlArray[17].Result = 0
         }
 
         # Calculate the weighted average for the virtual machine
@@ -1107,7 +1111,7 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Ensure App Service Environments (ASE) are deployed in highly available configurations across Availability Zones
-        $aseDetails = az appservice plan show --id $appDetails.appServicePlanId --resource-group $appservice.resourceGroup | ConvertFrom-Json -Depth 10
+        $aseDetails = az appservice plan show --id $appDetails.appServicePlanId | ConvertFrom-Json -Depth 10
         if ($aseDetails.properties.zoneRedundant -match 'True') {
             $AppServiceResults += "Good: ASE is deployed in a highly available configuration across Availability Zones for App Service $($appservice.name)"
             $appServiceControlArray[5].Result = 100
@@ -1167,7 +1171,7 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Enable Health check to identify non-responsive workers
-        if ($appDetails.healthCheckPath) {
+        if ($appDetails.siteConfig.healthCheckPath) {
             $AppServiceResults += "Good: Health check is enabled for App Service $($appservice.name)"
             $appServiceControlArray[10].Result = 100
         }
@@ -1245,8 +1249,8 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Check for Latest Version of .NET Framework
-        if ($appSettings.netFrameworkVersion) {
-            if ($appSettings.netFrameworkVersion -match 'v4.8') {
+        if ($appDetails.siteConfig.netFrameworkVersion) {
+            if ($appDetails.siteConfig.netFrameworkVersion -match 'v4.8') {
                 $AppServiceResults += "Good: Latest version of .NET Framework is used for App Service $($appservice.name)"
                 $appServiceControlArray[16].Result = 100
             }
@@ -1262,8 +1266,8 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Check for latest version of Java
-        if ($appSettings.javaVersion) {
-            if ($appSettings.javaVersion -match '1.8') {
+        if ($appDetails.siteConfig.javaVersion) {
+            if ($appDetails.siteConfig.javaVersion -match '1.8') {
                 $AppServiceResults += "Good: Latest version of Java is used for App Service $($appservice.name)"
                 $appServiceControlArray[17].Result = 100
             }
@@ -1279,8 +1283,8 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Check for Latest Version of PHP
-        if ($appSettings.phpVersion) {
-            if ($appSettings.phpVersion -match '8.2') {
+        if ($appDetails.siteConfig.phpVersion) {
+            if ($appDetails.siteConfig.phpVersion -match '8.2') {
                 $AppServiceResults += "Good: Latest version of PHP is used for App Service $($appservice.name)"
                 $appServiceControlArray[18].Result = 100
             }
@@ -1296,8 +1300,8 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Check for Latest Version of Python
-        if ($appSettings.pythonVersion) {
-            if ($appSettings.pythonVersion -match '3.12') {
+        if ($appDetails.siteConfig.pythonVersion) {
+            if ($appDetails.siteConfig.pythonVersion -match '3.12') {
                 $AppServiceResults += "Good: Latest version of Python is used for App Service $($appservice.name)"
                 $appServiceControlArray[19].Result = 100
             }
@@ -1323,7 +1327,7 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Check for TLS protocol version
-        if ($appSettings.minTlsVersion -match '1.2') {
+        if ($appDetails.siteConfig.minTlsVersion -match '1.2') {
             $AppServiceResults += "Good: TLS protocol version is set to 1.2 for App Service $($appservice.name)"
             $appServiceControlArray[21].Result = 100
         }
@@ -1333,7 +1337,7 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Check that Azure App Service is using the latest version of HTTP
-        if ($appSettings.http20Enabled -match 'True') {
+        if ($appDetails.siteConfig.http20Enabled -match 'True') {
             $AppServiceResults += "Good: Latest version of HTTP is used for App Service $($appservice.name)"
             $appServiceControlArray[22].Result = 100
         }
@@ -1353,7 +1357,7 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Disable plain FTP deployment
-        if ($appSettings.ftpState -match 'FtpsOnly' -or $appSettings.ftpState -match 'Disabled') {
+        if ($appDetails.siteConfig.ftpState -match 'FtpsOnly' -or $appSettings.ftpState -match 'Disabled') {
             $AppServiceResults += "Good: FTP access is disabled for App Service $($appservice.name)"
             $appServiceControlArray[24].Result = 100
         }
@@ -1363,7 +1367,7 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Disable remote debugging
-        if ($appSettings.remoteDebuggingEnabled -match 'False') {
+        if ($appDetails.siteConfig.remoteDebuggingEnabled -match 'False') {
             $AppServiceResults += "Good: Remote debugging is disabled for App Service $($appservice.name)"
             $appServiceControlArray[25].Result = 100
         }
@@ -1384,7 +1388,7 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Enable FTPS-only access
-        if ($appSettings.ftpState -match 'FtpsOnly') {
+        if ($appDetails.siteConfig.ftpState -match 'FtpsOnly') {
             $AppServiceResults += "Good: FTPS-only access is enabled for App Service $($appservice.name)"
             $appServiceControlArray[27].Result = 100
         }
@@ -1394,7 +1398,7 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Enable HTTPS-only traffic
-        if ($appDetails.httpsOnly -match 'True') {
+        if ($appDetails.siteConfig.httpsOnly -match 'True') {
             $AppServiceResults += "Good: HTTPS-only traffic is enabled for App Service $($appservice.name)"
             $appServiceControlArray[28].Result = 100
         }
