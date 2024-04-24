@@ -159,6 +159,8 @@ foreach ($sub in $AllSubscriptions) {
 
     foreach ($strg in $StorageAccounts) {
 
+        Write-Output "Checking Storage Account $($strg.name)..."
+
         $strgControlArray = @()
 
         foreach ($control in $StorageControls) {
@@ -472,6 +474,8 @@ foreach ($sub in $AllSubscriptions) {
     
     foreach ($keyvault in $Keyvaults) {
 
+        Write-Output "Checking Key Vault $($keyvault.name)..."
+
         $kvControlArray = @()
 
         foreach ($control in $KeyvaultControls) {
@@ -602,9 +606,10 @@ foreach ($sub in $AllSubscriptions) {
         $VaultResults += "Key Vault $($keyvault.name) has an average score of $roundedKvAvg %."
         $VaultResults += ""
 
+        $kvTotalScore += $kvScore
     }
 
-    $kvTotalAvg = $kvScore / ($kvTotalWeight * $Keyvaults.Count)
+    $kvTotalAvg = $kvTotalScore / ($kvTotalWeight * $Keyvaults.Count)
     $roundedKvTotalAvg = [math]::Round($kvTotalAvg, 1)
 
     $lateReport += "Total average score for all key vaults in subscription $($sub.name) is $roundedKvTotalAvg %."
@@ -662,6 +667,8 @@ foreach ($sub in $AllSubscriptions) {
     $jitPolicies = az security jit-policy list --query '[*].virtualMachines | []' | ConvertFrom-Json -Depth 10
 
     foreach ($vm in $VirtualMachines) {
+
+        Write-Output "Checking Virtual Machine $($vm.name)..."
 
         $vmControlArray = @()
 
@@ -968,9 +975,10 @@ foreach ($sub in $AllSubscriptions) {
         $VMResults += "Virtual Machine $($vm.name) has an average score of $roundedVmAvg %."
         $VMResults += ""
 
+        $vmTotalScore += $vmScore
     }
 
-    $vmTotalAvg = $vmScore / ($vmTotalWeight * $VirtualMachines.Count)
+    $vmTotalAvg = $vmTotalScore / ($vmTotalWeight * $VirtualMachines.Count)
     $roundedVmTotalAvg = [math]::Round($vmTotalAvg, 1)
 
     $lateReport += "Total average score for all virtual machines in subscription $($sub.name) is $roundedVmTotalAvg %."
@@ -1022,7 +1030,6 @@ foreach ($sub in $AllSubscriptions) {
         "Disable plain FTP deployment;Custom;80"
         "Disable remote debugging;Custom;80"
         "Enable App Service Authentication;Custom;80"
-        "Enable FTPS-only access;Custom;80"
         "Enable HTTPS-only traffic;Custom;80"
         "Enable registration with Microsoft Entra ID;Custom;80"
     )
@@ -1034,6 +1041,8 @@ foreach ($sub in $AllSubscriptions) {
     $AppServiceResults += "#######################################"
 
     foreach ($appservice in $AppServices) {
+
+        Write-Output "Checking App Service $($appservice.name)..."
 
         $appServiceControlArray = @()
 
@@ -1387,35 +1396,25 @@ foreach ($sub in $AllSubscriptions) {
             $appServiceControlArray[26].Result = 0
         }
 
-        # Enable FTPS-only access
-        if ($appDetails.siteConfig.ftpState -match 'FtpsOnly') {
-            $AppServiceResults += "Good: FTPS-only access is enabled for App Service $($appservice.name)"
-            $appServiceControlArray[27].Result = 100
-        }
-        else {
-            $AppServiceResults += "Bad: FTPS-only access is NOT enabled for App Service $($appservice.name)"
-            $appServiceControlArray[27].Result = 0
-        }
-
         # Enable HTTPS-only traffic
         if ($appDetails.siteConfig.httpsOnly -match 'True') {
             $AppServiceResults += "Good: HTTPS-only traffic is enabled for App Service $($appservice.name)"
-            $appServiceControlArray[28].Result = 100
+            $appServiceControlArray[27].Result = 100
         }
         else {
             $AppServiceResults += "Bad: HTTPS-only traffic is NOT enabled for App Service $($appservice.name)"
-            $appServiceControlArray[28].Result = 0
+            $appServiceControlArray[27].Result = 0
         }
 
         # Enable registration with Microsoft Entra ID
         $appIdentity = az webapp identity show --name $appservice.name --resource-group $appservice.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
         if ($appIdentity.type -match 'SystemAssigned') {
             $AppServiceResults += "Good: Registration with Microsoft Entra ID is enabled for App Service $($appservice.name)"
-            $appServiceControlArray[29].Result = 100
+            $appServiceControlArray[28].Result = 100
         }
         else {
             $AppServiceResults += "Bad: Registration with Microsoft Entra ID is NOT enabled for App Service $($appservice.name)"
-            $appServiceControlArray[29].Result = 0
+            $appServiceControlArray[28].Result = 0
         }
 
         # Calculate the weighted average for the app service
@@ -1427,9 +1426,10 @@ foreach ($sub in $AllSubscriptions) {
         $AppServiceResults += "App Service $($appservice.name) has an average score of $roundedAppServiceAvg %."
         $AppServiceResults += ""
 
+        $appServiceTotalScore += $appServiceScore
     }
 
-    $AppServiceTotalAvg = $appServiceScore / ($appServiceTotalWeight * $AppServices.Count)
+    $AppServiceTotalAvg = $appServiceTotalScore / ($appServiceTotalWeight * $AppServices.Count)
     $roundedAppServiceTotalAvg = [math]::Round($AppServiceTotalAvg, 1)
 
     $lateReport += "Total average score for all App Services in subscription $($sub.name) is $roundedAppServiceTotalAvg %."
