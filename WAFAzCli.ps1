@@ -212,12 +212,6 @@ foreach ($sub in $AllSubscriptions) {
             $strgControlArray[1].Result = 0
         }
 
-        # Consider the principle of least privilege when you assign permissions to a Microsoft Entra security principal through Azure RBAC.
-        ## This control is ambiguous. What exactly do we check for here? Needs to be discussed.
-
-        # Use managed identities to access blob and queue data.
-        ## Also ambiguous. Do we alert on users being assigned access to storage accounts?
-
         # Use blob versioning or immutable blobs to store business-critical data.
         ## Unable to query immutability due to this information being stored on container level, requiring a connection string, storage account key or SAS token.
         if (($BlobProperties | ConvertFrom-Json -Depth 10).isVersioningEnabled) {
@@ -280,10 +274,6 @@ foreach ($sub in $AllSubscriptions) {
             $strgControlArray[7].Result = 0
         }
 
-        # Limit shared access signature (SAS) tokens to HTTPS connections only.
-        ## This can not be evaluated. It is set when a SAS token is generated, and can not be retrieved anymore after that point.
-        ## Conformity mentions this as well in their documentation: https://www.trendmicro.com/cloudoneconformity/knowledge-base/azure/StorageAccounts/shared-access-signature-tokens-are-allowed-only-over-https.html
-
         # Avoid and prevent using Shared Key authorization to access storage accounts.
         if ($strg.allowSharedKeyAccess -match 'False') {
             $StorageResults += "Good: Shared Key authorization is disabled for storage account $($strg.name)."
@@ -313,13 +303,6 @@ foreach ($sub in $AllSubscriptions) {
             $strgControlArray[9].Result = 0
             # NOTE: Every storage account currently returns this. It is still unclear whether the query does not return the correct results, or storage keys are not regenerated on any ABN storage account.
         }
-
-        # Create a revocation plan and have it in place for any SAS that you issue to clients.
-        ## This control describes a process, not an Azure resource.
-
-        # Use near-term expiration times on an impromptu SAS, service SAS, or account SAS.
-        ## This can not be evaluated. It is set when a SAS token is generated, and can not be retrieved anymore after that point.
-        ## Conformity mentions this as well in their documentation: https://www.trendmicro.com/cloudoneconformity/knowledge-base/azure/StorageAccounts/shared-access-signature-tokens-expire-within-an-hour.html
 
         # Enable Azure Defender for all your storage accounts.
         if ($DefenderActive) {
@@ -362,12 +345,6 @@ foreach ($sub in $AllSubscriptions) {
         }
         $policy = $null
 
-        ## Extra checks ##
-
-        $StorageResults += ""
-        $StorageResults += "Extra checks"
-        $StorageResults += ""
-
         # Check for Publicly Accessible Web Containers
         ## Unable to query due to this information being stored on container level, requiring a connection string, storage account key or SAS token.
         #az storage container show --account-name $strg.name --name insights-operational-logs --query 'properties.publicAccess'
@@ -383,8 +360,7 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Enable Infrastructure Encryption
-        $EncryptStatus = az storage account show --name $strg.name --query '{"requireInfrastructureEncryption":encryption.requireInfrastructureEncryption}' 2> $null | ConvertFrom-Json -Depth 10
-        if ($EncryptStatus.requireInfrastructureEncryption -match $True) {
+        if ($strg.encryption.requireInfrastructureEncryption -match $True) {
             $StorageResults += "Good: Storage Account Infrastructure Encryption is enabled for storage account $($strg.name)."
             $strgControlArray[14].Result = 100
         }
@@ -394,18 +370,17 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Private Endpoint in Use
-        $pep = az storage account show --name $strg.name --query 'privateEndpointConnections' 2> $null
-        if ($pep -match '\[\]') {
-            $StorageResults += "Bad: No Private Endpoint attached to storage account $($strg.name)."
-            $strgControlArray[15].Result = 0
-        }
-        else {
+        if ($strg.privateEndpointConnections) {
             $StorageResults += "Good: A Private Endpoint is attached to storage account $($strg.name)."
             $strgControlArray[15].Result = 100
         }
+        else {
+            $StorageResults += "Bad: No Private Endpoint is attached to storage account $($strg.name)."
+            $strgControlArray[15].Result = 0
+        }
 
         # Storage Account Encryption using Customer Managed Keys
-        if (az storage account show --name $strg.name --query 'encryption.keyVaultProperties.keyName' 2> $null) {
+        if ($strg.encryption.keyVaultProperties.keyName) {
             $StorageResults += "Good: Storage account $($strg.name) is encrypted using Customer Managed Keys."
             $strgControlArray[16].Result = 100
         }
@@ -530,10 +505,10 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Check for Key Vault Full Administrator Permissions
-        $perms = az keyvault show --name $keyvault.name --query 'properties.accessPolicies[*].{"PrincipalId":objectId, "permissions":permissions}' | ConvertFrom-Json -Depth 10
-        if ('All' -in $perms.permissions.certificates -or 'All' -in $perms.permissions.keys -or 'All' -in $perms.permissions.secrets -or 'All' -in $perms.permissions.storage) {
+        $vaultsettings = az keyvault show --name $keyvault.name | ConvertFrom-Json -Depth 10
+        if ('All' -in $vaultsettings.properties.accesspolicies.permissions.certificates -or 'All' -in $vaultsettings.properties.accesspolicies.permissions.keys -or 'All' -in $vaultsettings.properties.accesspolicies.permissions.secrets -or 'All' -in $vaultsettings.properties.accesspolicies.permissions.storage) {
             $VaultResults += "Bad: Full access permissions found on keyvault $($keyvault.name):"
-            foreach ($perm in $perms) {
+            foreach ($perm in $vaultsettings.properties.accesspolicies.permissions) {
                 if ('All' -in $perm.permissions.certificates -or 'All' -in $perm.permissions.keys -or 'All' -in $perm.permissions.secrets -or 'All' -in $perm.permissions.storage) {
                     $VaultResults += "Principal with ID $($perm.PrincipalId) has Full Access on one or all of Certificates/Keys/Secrets/Storage."
                 }
@@ -557,7 +532,6 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Purge Protection should be enabled for Azure Key Vault
-        $vaultsettings = az keyvault show --name $keyvault.name | ConvertFrom-Json -Depth 10
         if ($vaultsettings.properties.enablePurgeProtection -eq 'True') {
             $VaultResults += "Good: Purge Protection is enabled for keyvault $($keyvault.name)"
             $kvControlArray[5].Result = 100
@@ -1646,11 +1620,13 @@ foreach ($sub in $AllSubscriptions) {
         }
     }
 
+    $WAFResults += "##################"
+    $WAFResults += "Summary of results"
+    $WAFResults += "##################"
+    $WAFResults += ""
     $WAFResults += $lateReport
     $WAFResults += ""
-    $WAFResults += "#################################"
     $WAFResults += "Final Weighted Average by Pillar"
-    $WAFResults += "#################################"
     $WAFResults += ""
     foreach ($finalAverage in $finalAverageArray) {
         $WAFResults += "$($finalAverage.Pillar) has an average score of $($finalAverage.Average) %."
