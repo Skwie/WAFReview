@@ -444,6 +444,9 @@ foreach ($sub in $AllSubscriptions) {
     $VaultResults += "WAF Assessment Results for Key Vaults"
     $VaultResults += "#####################################"
 
+    $kvTotalAvg = 0
+    $kvTotalScore = 0
+
     # Note: There are no controls described for Key Vaults in the Microsoft WAF documentation.
     # We will primarily be using the Conformity checks, as well as IT Guardrail checks.
     
@@ -636,6 +639,9 @@ foreach ($sub in $AllSubscriptions) {
     $VMResults += "###########################################"
     $VMResults += "WAF Assessment Results for Virtual Machines"
     $VMResults += "###########################################"
+
+    $vmTotalAvg = 0
+    $vmTotalScore = 0
 
     # Query JIT policies once, as they are not VM-specific
     $jitPolicies = az security jit-policy list --query '[*].virtualMachines | []' | ConvertFrom-Json -Depth 10
@@ -1013,6 +1019,9 @@ foreach ($sub in $AllSubscriptions) {
     $AppServiceResults += "#######################################"
     $AppServiceResults += "WAF Assessment Results for App Services"
     $AppServiceResults += "#######################################"
+
+    $AppServiceTotalAvg = 0
+    $AppServiceTotalScore = 0
 
     foreach ($appservice in $AppServices) {
 
