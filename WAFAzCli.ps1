@@ -1457,7 +1457,6 @@ foreach ($sub in $AllSubscriptions) {
 
         $AppServiceResults += ""
         $AppServiceResults += "App Service $($appservice.name) has an average score of $roundedAppServiceAvg %."
-        $AppServiceResults += ""
 
         $appServiceTotalScore += $appServiceScore
     }
@@ -1470,7 +1469,7 @@ foreach ($sub in $AllSubscriptions) {
     }
     else {
         $AppServiceResults += ""
-        $AppServiceResults += "No App Services found for subscription $($sub.name)."
+        $AppServiceResults += "No App Services found for subscription $($sub.name) or all App Services have been skipped."
         $AppServiceResults += ""
     }
 
