@@ -546,9 +546,9 @@ foreach ($sub in $AllSubscriptions) {
         $vaultsettings = az keyvault show --name $keyvault.name | ConvertFrom-Json -Depth 10
         if ('All' -in $vaultsettings.properties.accesspolicies.permissions.certificates -or 'All' -in $vaultsettings.properties.accesspolicies.permissions.keys -or 'All' -in $vaultsettings.properties.accesspolicies.permissions.secrets -or 'All' -in $vaultsettings.properties.accesspolicies.permissions.storage) {
             $VaultResults += "Bad: Full access permissions found on keyvault $($keyvault.name):"
-            foreach ($perm in $vaultsettings.properties.accesspolicies.permissions) {
+            foreach ($perm in $vaultsettings.properties.accesspolicies) {
                 if ('All' -in $perm.permissions.certificates -or 'All' -in $perm.permissions.keys -or 'All' -in $perm.permissions.secrets -or 'All' -in $perm.permissions.storage) {
-                    $VaultResults += "Principal with ID $($perm.PrincipalId) has Full Access on one or all of Certificates/Keys/Secrets/Storage."
+                    $VaultResults += "Principal with ID $($perm.objectId) has Full Access on one or all of Certificates/Keys/Secrets/Storage."
                 }
             }
             $kvControlArray[3].Result = 0
