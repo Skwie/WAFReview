@@ -1382,7 +1382,7 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Disable plain FTP deployment
-        if ($appDetails.siteConfig.ftpState -match 'FtpsOnly' -or $appDetails.siteconfig.ftpState -match 'Disabled') {
+        if ($appDetails.siteConfig.ftpsState -match 'FtpsOnly' -or $appDetails.siteconfig.ftpsState -match 'Disabled') {
             $AppServiceResults += "Good: FTP access is disabled for App Service $($appservice.name)"
             $appServiceControlArray[23].Result = 100
         }
