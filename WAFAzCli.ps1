@@ -1461,6 +1461,8 @@ foreach ($sub in $AllSubscriptions) {
 
     ############### Region Score by Pillars ##################
 
+    $allWeightedAverages = @()
+
     # Get all weighted averages for each service
     if ($StorageAccounts) {
         $allStrgWeightedAverages = Get-AllWeightedAveragesPerService($strgControlArray)
