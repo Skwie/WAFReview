@@ -443,6 +443,7 @@ foreach ($sub in $AllSubscriptions) {
         $lateReport += "Total average score for all storage accounts in subscription $($sub.name) is $roundedStorageTotalAvg %."
     }
     else {
+        $StorageResults += ""
         $StorageResults += "No storage accounts found for subscription $($sub.name)."
         $StorageResults += ""
     }
@@ -629,6 +630,7 @@ foreach ($sub in $AllSubscriptions) {
         $lateReport += "Total average score for all key vaults in subscription $($sub.name) is $roundedKvTotalAvg %."
     }
     else {
+        $VaultResults += ""
         $VaultResults += "No key vaults found for subscription $($sub.name)."
         $VaultResults += ""
     }
@@ -1002,6 +1004,7 @@ foreach ($sub in $AllSubscriptions) {
         $lateReport += "Total average score for all virtual machines in subscription $($sub.name) is $roundedVmTotalAvg %."
     }
     else {
+        $VMResults += ""
         $VMResults += "No virtual machines found for subscription $($sub.name)."
         $VMResults += ""
     }
@@ -1457,6 +1460,7 @@ foreach ($sub in $AllSubscriptions) {
         $lateReport += "Total average score for all App Services in subscription $($sub.name) is $roundedAppServiceTotalAvg %."
     }
     else {
+        $AppServiceResults += ""
         $AppServiceResults += "No App Services found for subscription $($sub.name)."
         $AppServiceResults += ""
     }
