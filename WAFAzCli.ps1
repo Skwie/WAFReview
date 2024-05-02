@@ -1064,6 +1064,7 @@ foreach ($sub in $AllSubscriptions) {
 
     $AppServiceTotalAvg = 0
     $AppServiceTotalScore = 0
+    $skippedAppServices = 0
 
     foreach ($appservice in $AppServices) {
 
@@ -1071,7 +1072,10 @@ foreach ($sub in $AllSubscriptions) {
 
         $appDetails = az webapp show --name $appservice.name --resource-group $appservice.resourceGroup | ConvertFrom-Json -Depth 10
         if (!$appDetails) {
+            $skippedAppServices += 1
+            $AppServiceResults += ""
             $AppServiceResults += "Unable to retrieve app details for App Service $($appservice.name). This is most likely due to insufficient permissions. Skipping..."
+            $AppServiceResults += ""
             Continue
         }
 
@@ -1458,7 +1462,7 @@ foreach ($sub in $AllSubscriptions) {
         $appServiceTotalScore += $appServiceScore
     }
 
-    if ($AppServices) {
+    if (($appServices.Count - $skippedAppServices ) -gt 0) {
         $appServiceTotalAvg = $appServiceTotalScore / ($appServiceTotalWeight * $AppServices.Count)
         $roundedAppServiceTotalAvg = [math]::Round($appServiceTotalAvg, 1)
 
