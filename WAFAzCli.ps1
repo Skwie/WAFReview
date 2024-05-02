@@ -1069,6 +1069,12 @@ foreach ($sub in $AllSubscriptions) {
 
         Write-Output "Checking App Service $($appservice.name)..."
 
+        $appDetails = az webapp show --name $appservice.name --resource-group $appservice.resourceGroup | ConvertFrom-Json -Depth 10
+        if (!$appDetails) {
+            $AppServiceResults += "Unable to retrieve app details for App Service $($appservice.name). This is most likely due to insufficient permissions. Skipping..."
+            Continue
+        }
+
         $appServiceControlArray = @()
 
         foreach ($control in $AppServiceControls) {
@@ -1093,7 +1099,6 @@ foreach ($sub in $AllSubscriptions) {
         $AppServiceResults += ""
 
         # Consider disabling ARR Affinity for your App Service
-        $appDetails = az webapp show --name $appservice.name --resource-group $appservice.resourceGroup | ConvertFrom-Json -Depth 10
         if ($appDetails.clientAffinityEnabled -match 'False') {
             $AppServiceResults += "Good: ARR Affinity is disabled for App Service $($appservice.name)"
             $appServiceControlArray[0].Result = 100
@@ -1474,28 +1479,28 @@ foreach ($sub in $AllSubscriptions) {
     $allWeightedAverages = @()
 
     # Get all weighted averages for each service
-    if ($StorageAccounts) {
+    if ($strgControlArray) {
         $allStrgWeightedAverages = Get-AllWeightedAveragesPerService($strgControlArray)
         foreach ($strgWeightedAverage in $allStrgWeightedAverages) {
             $allWeightedAverages += $strgWeightedAverage
         }
     }
 
-    if ($Keyvaults) {
+    if ($kvControlArray) {
         $allKvWeightedAverages = Get-AllWeightedAveragesPerService($kvControlArray)
         foreach ($kvWeightedAverage in $allKvWeightedAverages) {
             $allWeightedAverages += $kvWeightedAverage
         }
     }
 
-    if ($VirtualMachines) {
+    if ($vmControlArray) {
         $allVmWeightedAverages = Get-AllWeightedAveragesPerService($vmControlArray)
         foreach ($vmWeightedAverage in $allVmWeightedAverages) {
             $allWeightedAverages += $vmWeightedAverage
         }
     }
 
-    if ($AppServices) {
+    if ($appServiceControlArray) {
         $allAppServiceWeightedAverages = Get-AllWeightedAveragesPerService($appServiceControlArray)
         foreach ($appServiceWeightedAverage in $allAppServiceWeightedAverages) {
             $allWeightedAverages += $appServiceWeightedAverage
