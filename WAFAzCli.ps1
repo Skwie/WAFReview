@@ -436,12 +436,13 @@ foreach ($sub in $AllSubscriptions) {
         $storageTotalScore += $storageScore
     }
 
-    $storageTotalAvg = $storageTotalScore / ($strgTotalWeight * $StorageAccounts.Count)
-    $roundedStorageTotalAvg = [math]::Round($storageTotalAvg, 1)
+    if ($storageAccounts) {
+        $storageTotalAvg = $storageTotalScore / ($strgTotalWeight * $StorageAccounts.Count)
+        $roundedStorageTotalAvg = [math]::Round($storageTotalAvg, 1)
 
-    $lateReport += "Total average score for all storage accounts in subscription $($sub.name) is $roundedStorageTotalAvg %."
-
-    if (!$StorageAccounts) {
+        $lateReport += "Total average score for all storage accounts in subscription $($sub.name) is $roundedStorageTotalAvg %."
+    }
+    else {
         $StorageResults += "No storage accounts found for subscription $($sub.name)."
         $StorageResults += ""
     }
@@ -621,12 +622,13 @@ foreach ($sub in $AllSubscriptions) {
         $kvTotalScore += $kvScore
     }
 
-    $kvTotalAvg = $kvTotalScore / ($kvTotalWeight * $Keyvaults.Count)
-    $roundedKvTotalAvg = [math]::Round($kvTotalAvg, 1)
+    if ($Keyvaults) {
+        $kvTotalAvg = $kvTotalScore / ($kvTotalWeight * $Keyvaults.Count)
+        $roundedKvTotalAvg = [math]::Round($kvTotalAvg, 1)
 
-    $lateReport += "Total average score for all key vaults in subscription $($sub.name) is $roundedKvTotalAvg %."
-
-    if (!$Keyvaults) {
+        $lateReport += "Total average score for all key vaults in subscription $($sub.name) is $roundedKvTotalAvg %."
+    }
+    else {
         $VaultResults += "No key vaults found for subscription $($sub.name)."
         $VaultResults += ""
     }
@@ -993,12 +995,13 @@ foreach ($sub in $AllSubscriptions) {
         $vmTotalScore += $vmScore
     }
 
-    $vmTotalAvg = $vmTotalScore / ($vmTotalWeight * $VirtualMachines.Count)
-    $roundedVmTotalAvg = [math]::Round($vmTotalAvg, 1)
+    if ($VirtualMachines) {
+        $vmTotalAvg = $vmTotalScore / ($vmTotalWeight * $VirtualMachines.Count)
+        $roundedVmTotalAvg = [math]::Round($vmTotalAvg, 1)
 
-    $lateReport += "Total average score for all virtual machines in subscription $($sub.name) is $roundedVmTotalAvg %."
-
-    if (!$VirtualMachines) {
+        $lateReport += "Total average score for all virtual machines in subscription $($sub.name) is $roundedVmTotalAvg %."
+    }
+    else {
         $VMResults += "No virtual machines found for subscription $($sub.name)."
         $VMResults += ""
     }
@@ -1008,6 +1011,8 @@ foreach ($sub in $AllSubscriptions) {
     # End region
 
     ################# Region App Services ####################
+
+    Write-Output "Checking App Services for subscription $($sub.name)..."
 
     try {
         $AppServices = az webapp list 2> $null | ConvertFrom-Json -Depth 10
@@ -1445,12 +1450,13 @@ foreach ($sub in $AllSubscriptions) {
         $appServiceTotalScore += $appServiceScore
     }
 
-    $AppServiceTotalAvg = $appServiceTotalScore / ($appServiceTotalWeight * $AppServices.Count)
-    $roundedAppServiceTotalAvg = [math]::Round($AppServiceTotalAvg, 1)
+    if ($AppServices) {
+        $appServiceTotalAvg = $appServiceTotalScore / ($appServiceTotalWeight * $AppServices.Count)
+        $roundedAppServiceTotalAvg = [math]::Round($appServiceTotalAvg, 1)
 
-    $lateReport += "Total average score for all App Services in subscription $($sub.name) is $roundedAppServiceTotalAvg %."
-
-    if (!$AppServices) {
+        $lateReport += "Total average score for all App Services in subscription $($sub.name) is $roundedAppServiceTotalAvg %."
+    }
+    else {
         $AppServiceResults += "No App Services found for subscription $($sub.name)."
         $AppServiceResults += ""
     }
