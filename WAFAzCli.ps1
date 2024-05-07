@@ -1559,10 +1559,11 @@ foreach ($sub in $AllSubscriptions) {
     # Calculate the final average for each pillar
     foreach ($finalAverage in $finalAverageArray) {
         if ($finalAverage.Count -gt 0) {
-            $finalAverage.Average = $finalAverage.Average / $finalAverage.Count
+            $finalAverage.Average = [math]::Round($finalAverage.Average / $finalAverage.Count, 1)
         }
     }
 
+    $WAFResults += ""
     $WAFResults += "##################"
     $WAFResults += "Summary of results"
     $WAFResults += "##################"
