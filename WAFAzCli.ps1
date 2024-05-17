@@ -1457,6 +1457,7 @@ foreach ($sub in $AllSubscriptions) {
 
         $AppServiceResults += ""
         $AppServiceResults += "App Service $($appservice.name) has an average score of $roundedAppServiceAvg %."
+        $AppServiceResults += ""
 
         $appServiceTotalScore += $appServiceScore
     }
@@ -1474,6 +1475,460 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     $WAFResults += $AppServiceResults
+
+    # End region
+
+    ################## Region PostgreSQL #####################
+
+    Write-Output "Checking PostgreSQL databases for subscription $($sub.name)..."
+
+    $PostgreSQLServers = @()
+
+    try {
+        $PostgreSQLServers += az postgres server list 2> $null | ConvertFrom-Json -Depth 10
+    }
+    catch {
+        Write-Error "Unable to retrieve PostgreSQL single servers for subscription $($sub.name)." -ErrorAction Continue
+    }
+
+    try {
+        $PostgreSQLServers += az postgres flexible-server list 2> $null | ConvertFrom-Json -Depth 10
+    }
+    catch {
+        Write-Error "Unable to retrieve PostgreSQL flexible servers for subscription $($sub.name)." -ErrorAction Continue
+    }
+
+    # Define controls for PostgreSQL
+    $PostgreSQLControls = @(
+        "Configure geo-redundancy backup;Reliability;80"
+        "Monitor your server to ensure it's healthy and performing as expected;Reliability;90"
+        "SSL and enforce encryption to secure data in transit;Security;90"
+        "Implement network security groups and firewalls to control access to your database;Security;90"
+        "Use Azure Active Directory for authentication and authorization to enhance identity management;Security;90"
+        "Deploy to the same region as the app;Cost Optimization;80"
+        "Set up automated backups and retention policies to maintain data availability and meet compliance requirements;Operational Excellence;90"
+        "Check for PostgreSQL Log Retention Period;Custom;80"
+        "Check for PostgreSQL Major Version;Custom;80"
+        "Disable 'Allow access to Azure services' for PostgreSQL database servers;Custom;80"
+        "Enable 'CONNECTION_THROTTLING' Parameter for PostgreSQL Servers;Custom;80"
+        "Enable 'LOG_CHECKPOINTS' Parameter for PostgreSQL Servers;Custom;80"
+        "Enable 'LOG_CONNECTIONS' Parameter for PostgreSQL Servers;Custom;80"
+        "Enable 'LOG_DISCONNECTIONS' Parameter for PostgreSQL Servers;Custom;80"
+        "Enable 'LOG_DURATION' Parameter for PostgreSQL Servers;Custom;80"
+        "Enable 'log_checkpoints' Parameter for PostgreSQL Flexible Servers;Custom;80"
+        "Enable Storage Auto-Growth;Custom;80"
+    )
+
+    $PostgreSQLResults = @()
+    $PostgreSQLResults += ""
+
+    $PostgreSQLTotalAvg = 0
+    $PostgreSQLTotalScore = 0
+
+    foreach ($server in $PostgreSQLServers) {
+
+        Write-Output "Checking PostgreSQL server $($server.name)..."
+
+        $serverStatus = $null
+
+        try{
+            $serverDetails = az postgres server show --name $server.name --resource-group $server.resourceGroup | ConvertFrom-Json -Depth 10
+            $serverStatus = "single"
+        }
+        catch {
+            $serverDetails = az postgres flexible-server show --name $server.name --resource-group $server.resourceGroup | ConvertFrom-Json -Depth 10
+            $serverStatus = "flexible"
+        }
+        
+        if (!$serverDetails) {
+            $PostgreSQLResults += ""
+            $PostgreSQLResults += "Unable to retrieve server details for PostgreSQL server $($server.name). This is most likely due to insufficient permissions. Skipping..."
+            $PostgreSQLResults += ""
+            Continue
+        }
+
+        $postgreSQLControlArray = @()
+
+        foreach ($control in $PostgreSQLControls) {
+            $postgreSQLCheck = $control.Split(';')
+            $postgreSQLCheckName = $postgreSQLCheck[0]
+            $postgreSQLCheckPillars = $postgreSQLCheck[1].Split(',')
+            $postgreSQLCheckWeight = $postgreSQLCheck[2]
+    
+            $postgreSQLControlArray += [PSCustomObject]@{
+                Name = $postgreSQLCheckName
+                Pillars = $postgreSQLCheckPillars
+                Weight = $postgreSQLCheckWeight
+                Result = $null
+            }
+        }
+
+        # Calculate total weight to calculate weighted average
+        $postgreSQLTotalWeight = Get-TotalWeights($postgreSQLControlArray)
+
+        $PostgreSQLResults += ""
+        $PostgreSQLResults += "----- PostgreSQL Server - $($server.name) -----"
+        $PostgreSQLResults += ""
+
+        # Configure geo-redundancy backup
+        if ($serverStatus -match 'single') {
+            if ($serverDetails.storageProfile.geoRedundantBackup -match 'Enabled') {
+                $PostgreSQLResults += "Good: Geo-redundancy backup is enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[0].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: Geo-redundancy backup is NOT enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[0].Result = 0
+            }
+        }
+        if ($serverStatus -match 'flexible') {
+            if ($serverDetails.backup.geoRedundantBackup -match 'Enabled') {
+                $PostgreSQLResults += "Good: Geo-redundancy backup is enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[0].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: Geo-redundancy backup is NOT enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[0].Result = 0
+            }
+        }
+
+        # Monitor your server to ensure it's healthy and performing as expected
+        $serverMetrics = az monitor metrics alert list --resource $server.id --resource-group $server.resourceGroup
+        if ($serverMetrics) {
+            $PostgreSQLResults += "Good: Server is monitored for PostgreSQL server $($server.name)"
+            $postgreSQLControlArray[1].Result = 100
+        }
+        else {
+            $PostgreSQLResults += "Bad: Server is NOT monitored for PostgreSQL server $($server.name)"
+            $postgreSQLControlArray[1].Result = 0
+        }
+
+        # SSL and enforce encryption to secure data in transit
+        if ($serverStatus -match 'single') {
+            if ($serverDetails.sslEnforcement -match 'Enabled') {
+                $PostgreSQLResults += "Good: SSL is enforced for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[2].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: SSL is NOT enforced for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[2].Result = 0
+            }
+        }
+        if ($serverStatus -match 'flexible') {
+            if ($serverDetails.dataEncryption) {
+                $PostgreSQLResults += "Good: Data encryption is enforced for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[2].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: Data encryption is NOT enforced for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[2].Result = 0
+            }
+        }
+
+        # Implement network security groups and firewalls to control access to your database
+        if ($serverStatus -match "single") {
+            $firewallRules = az postgres server firewall-rule list --server-name $server.name --resource-group $server.resourceGroup | ConvertFrom-Json -Depth 10
+            if ($firewallRules) {
+                $PostgreSQLResults += "Good: Firewall rules are implemented for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[3].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: Firewall rules are NOT implemented for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[3].Result = 0
+            }
+        }
+        if ($serverStatus -match "flexible") {
+            $firewallRules = az postgres flexible-server firewall-rule list --name $server.name --resource-group $server.resourceGroup | ConvertFrom-Json -Depth 10
+            if ($firewallRules) {
+                $PostgreSQLResults += "Good: Firewall rules are implemented for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[3].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: Firewall rules are NOT implemented for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[3].Result = 0
+            }
+        }
+
+        # Use Azure Active Directory for authentication and authorization to enhance identity management
+        if ($serverDetails.identity -match 'SystemAssigned') {
+            $PostgreSQLResults += "Good: Azure Active Directory is used for authentication and authorization for PostgreSQL server $($server.name)"
+            $postgreSQLControlArray[4].Result = 100
+        }
+        else {
+            $PostgreSQLResults += "Bad: Azure Active Directory is NOT used for authentication and authorization for PostgreSQL server $($server.name)"
+            $postgreSQLControlArray[4].Result = 0
+        }
+
+        # Deploy to the same region as the app
+        if ($server.location -match $appDetails.location) {
+            $PostgreSQLResults += "Good: PostgreSQL server is deployed in the same region as the app for PostgreSQL server $($server.name)"
+            $postgreSQLControlArray[5].Result = 100
+        }
+        else {
+            $PostgreSQLResults += "Bad: PostgreSQL server is NOT deployed in the same region as the app for PostgreSQL server $($server.name)"
+            $postgreSQLControlArray[5].Result = 0
+        }
+
+        # Set up automated backups and retention policies to maintain data availability and meet compliance requirements
+        if ($serverStatus -match 'single') {
+            if ($serverDetails.storageProfile.backupRetentionDays -ge 7) {
+                $PostgreSQLResults += "Good: Backup retention period is sufficient for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[6].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: Backup retention period is NOT sufficient for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[6].Result = 0
+            }
+        }
+        if ($serverStatus -match 'flexible') {
+            if ($serverDetails.backup.retentionDays -ge 7) {
+                $PostgreSQLResults += "Good: Backup retention period is sufficient for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[6].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: Backup retention period is NOT sufficient for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[6].Result = 0
+            }
+        }
+
+        # Check for PostgreSQL Log Retention Period
+        if ($serverStatus -match 'single') {
+            $logretention = az postgres server configuration show --server-name $server.name --resource-group $server.resourceGroup --name log_retention_days
+            if ($logretention.value -ge 7) {
+                $PostgreSQLResults += "Good: Log retention period is sufficient for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[7].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: Log retention period is NOT sufficient for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[7].Result = 0
+            }
+        }
+        if ($serverStatus -match 'flexible') {
+            $logretention = az postgres flexible-server configuration show --name $server.name --resource-group $server.resourceGroup --config-name log_retention_days
+            if ($logretention.value -ge 7) {
+                $PostgreSQLResults += "Good: Log retention period is sufficient for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[7].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: Log retention period is NOT sufficient for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[7].Result = 0
+            }
+        }
+
+        # Check for PostgreSQL Major Version
+        if ($serverDetails.sku.tier -match 'GeneralPurpose' -and $serverDetails.sku.name -match 'GP_Gen5') {
+            $PostgreSQLResults += "Good: PostgreSQL server is using the latest major version for PostgreSQL server $($server.name)"
+            $postgreSQLControlArray[8].Result = 100
+        }
+        else {
+            $PostgreSQLResults += "Bad: PostgreSQL server is NOT using the latest major version for PostgreSQL server $($server.name)"
+            $postgreSQLControlArray[8].Result = 0
+        }
+
+        # Disable 'Allow access to Azure services' for PostgreSQL database servers
+        if ($serverStatus -match 'single') {
+            if ($serverDetails.allowAzureIps -match 'Disabled') {
+                $PostgreSQLResults += "Good: 'Allow access to Azure services' is disabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[9].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: 'Allow access to Azure services' is NOT disabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[9].Result = 0
+            }
+        }
+        if ($serverStatus -match 'flexible') {
+            if ($serverDetails.allowAzureIps -match 'Disabled') {
+                $PostgreSQLResults += "Good: 'Allow access to Azure services' is disabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[9].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: 'Allow access to Azure services' is NOT disabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[9].Result = 0
+            }
+        }
+
+        # Enable 'CONNECTION_THROTTLING' Parameter for PostgreSQL Servers
+        if ($serverStatus -match 'single') {
+            $connectionThrottling = az postgres server configuration show --server-name $server.name --resource-group $server.resourceGroup --name connection_throttling
+            if ($connectionThrottling.value -match 'on') {
+                $PostgreSQLResults += "Good: 'CONNECTION_THROTTLING' parameter is enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[10].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: 'CONNECTION_THROTTLING' parameter is NOT enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[10].Result = 0
+            }
+        }
+        if ($serverStatus -match 'flexible') {
+            $connectionThrottling = az postgres flexible-server configuration show --name $server.name --resource-group $server.resourceGroup --config-name connection_throttling
+            if ($connectionThrottling.value -match 'on') {
+                $PostgreSQLResults += "Good: 'CONNECTION_THROTTLING' parameter is enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[10].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: 'CONNECTION_THROTTLING' parameter is NOT enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[10].Result = 0
+            }
+        }
+
+        # Enable 'LOG_CHECKPOINTS' Parameter for PostgreSQL Servers
+        if ($serverStatus -match 'single') {
+            $logCheckpoints = az postgres server configuration show --server-name $server.name --resource-group $server.resourceGroup --name log_checkpoints
+            if ($logCheckpoints.value -match 'on') {
+                $PostgreSQLResults += "Good: 'LOG_CHECKPOINTS' parameter is enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[11].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: 'LOG_CHECKPOINTS' parameter is NOT enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[11].Result = 0
+            }
+        }
+        if ($serverStatus -match 'flexible') {
+            $logCheckpoints = az postgres flexible-server configuration show --name $server.name --resource-group $server.resourceGroup --config-name log_checkpoints
+            if ($logCheckpoints.value -match 'on') {
+                $PostgreSQLResults += "Good: 'LOG_CHECKPOINTS' parameter is enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[11].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: 'LOG_CHECKPOINTS' parameter is NOT enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[11].Result = 0
+            }
+        }
+
+        # Enable 'LOG_CONNECTIONS' Parameter for PostgreSQL Servers
+        if ($serverStatus -match 'single') {
+            $logConnections = az postgres server configuration show --server-name $server.name --resource-group $server.resourceGroup --name log_connections
+            if ($logConnections.value -match 'on') {
+                $PostgreSQLResults += "Good: 'LOG_CONNECTIONS' parameter is enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[12].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: 'LOG_CONNECTIONS' parameter is NOT enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[12].Result = 0
+            }
+        }
+        if ($serverStatus -match 'flexible') {
+            $logConnections = az postgres flexible-server configuration show --name $server.name --resource-group $server.resourceGroup --config-name log_connections
+            if ($logConnections.value -match 'on') {
+                $PostgreSQLResults += "Good: 'LOG_CONNECTIONS' parameter is enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[12].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: 'LOG_CONNECTIONS' parameter is NOT enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[12].Result = 0
+            }
+        }
+
+        # Enable 'LOG_DISCONNECTIONS' Parameter for PostgreSQL Servers
+        if ($serverStatus -match 'single') {
+            $logDisconnections = az postgres server configuration show --server-name $server.name --resource-group $server.resourceGroup --name log_disconnections
+            if ($logDisconnections.value -match 'on') {
+                $PostgreSQLResults += "Good: 'LOG_DISCONNECTIONS' parameter is enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[13].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: 'LOG_DISCONNECTIONS' parameter is NOT enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[13].Result = 0
+            }
+        }
+        if ($serverStatus -match 'flexible') {
+            $logDisconnections = az postgres flexible-server configuration show --name $server.name --resource-group $server.resourceGroup --config-name log_disconnections
+            if ($logDisconnections.value -match 'on') {
+                $PostgreSQLResults += "Good: 'LOG_DISCONNECTIONS' parameter is enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[13].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: 'LOG_DISCONNECTIONS' parameter is NOT enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[13].Result = 0
+            }
+        }
+
+        # Enable 'LOG_DURATION' Parameter for PostgreSQL Servers
+        if ($serverStatus -match 'single') {
+            $logDuration = az postgres server configuration show --server-name $server.name --resource-group $server.resourceGroup --name log_duration
+            if ($logDuration.value -match 'on') {
+                $PostgreSQLResults += "Good: 'LOG_DURATION' parameter is enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[14].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: 'LOG_DURATION' parameter is NOT enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[14].Result = 0
+            }
+        }
+        if ($serverStatus -match 'flexible') {
+            $logDuration = az postgres flexible-server configuration show --name $server.name --resource-group $server.resourceGroup --config-name log_duration
+            if ($logDuration.value -match 'on') {
+                $PostgreSQLResults += "Good: 'LOG_DURATION' parameter is enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[14].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: 'LOG_DURATION' parameter is NOT enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[14].Result = 0
+            }
+        }
+
+        # Enable 'log_checkpoints' Parameter for PostgreSQL Flexible Servers
+        if ($serverStatus -match 'flexible') {
+            $logCheckpoints = az postgres flexible-server configuration show --name $server.name --resource-group $server.resourceGroup --config-name log_checkpoints
+            if ($logCheckpoints.value -match 'on') {
+                $PostgreSQLResults += "Good: 'log_checkpoints' parameter is enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[15].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: 'log_checkpoints' parameter is NOT enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[15].Result = 0
+            }
+        }
+
+        # Enable Storage Auto-Growth
+        if ($serverStatus -match 'single') {
+            $autoGrowth = az postgres server configuration show --server-name $server.name --resource-group $server.resourceGroup --name storage_autogrow
+            if ($autoGrowth.value -match 'on') {
+                $PostgreSQLResults += "Good: Storage Auto-Growth is enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[16].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: Storage Auto-Growth is NOT enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[16].Result = 0
+            }
+        }
+        if ($serverStatus -match 'flexible') {
+            $autoGrowth = az postgres flexible-server configuration show --name $server.name --resource-group $server.resourceGroup --config-name storage_autogrow
+            if ($autoGrowth.value -match 'on') {
+                $PostgreSQLResults += "Good: Storage Auto-Growth is enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[16].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: Storage Auto-Growth is NOT enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[16].Result = 0
+            }
+        }
+
+        # Calculate the weighted average for the PostgreSQL server
+        $postgreSQLScore = $postgreSQLControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
+        $postgreSQLAvgScore = $postgreSQLScore / $postgreSQLTotalWeight
+        $roundedPostgreSQLAvg = [math]::Round($postgreSQLAvgScore, 1)
+
+        $PostgreSQLResults += ""
+        $PostgreSQLResults += "PostgreSQL server $($server.name) has an average score of $roundedPostgreSQLAvg %."
+        $PostgreSQLResults += ""
+
+        $PostgreSQLTotalScore += $postgreSQLScore
+    }
+
+    if ($PostgreSQLServers.Count -gt 0) {
+        $PostgreSQLTotalAvg = $PostgreSQLTotalScore / ($postgreSQLTotalWeight * $PostgreSQLServers.Count)
+        $roundedPostgreSQLTotalAvg = [math]::Round($PostgreSQLTotalAvg, 1)
+
+        $lateReport += "Total average score for all PostgreSQL servers in subscription $($sub.name) is $roundedPostgreSQLTotalAvg %."
+    }
+    else {
+        $PostgreSQLResults += ""
+        $PostgreSQLResults += "No PostgreSQL servers found for subscription $($sub.name)."
+        $PostgreSQLResults += ""
+    }
+
+    $WAFResults += $PostgreSQLResults
 
     # End region
 
@@ -1507,6 +1962,13 @@ foreach ($sub in $AllSubscriptions) {
         $allAppServiceWeightedAverages = Get-AllWeightedAveragesPerService($appServiceControlArray)
         foreach ($appServiceWeightedAverage in $allAppServiceWeightedAverages) {
             $allWeightedAverages += $appServiceWeightedAverage
+        }
+    }
+
+    if ($postgreSQLControlArray) {
+        $allPostgreSQLWeightedAverages = Get-AllWeightedAveragesPerService($postgreSQLControlArray)
+        foreach ($postgreSQLWeightedAverage in $allPostgreSQLWeightedAverages) {
+            $allWeightedAverages += $postgreSQLWeightedAverage
         }
     }
 
