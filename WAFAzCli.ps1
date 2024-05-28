@@ -2034,7 +2034,7 @@ foreach ($sub in $AllSubscriptions) {
 
         # Use role-based access control to limit control-plane access to specific identities and groups and within the scope of well-defined assignments
         try {
-            $roleAssignments = az cosmosdb sql role assignment list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup
+            $roleAssignments = az cosmosdb sql role assignment list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup 2> $null
             if ($roleAssignments) {
                 $CosmosDBResults += "Good: Role-based access control is used for CosmosDB account $($cosmosAcct.name)"
                 $cosmosDBControlArray[4].Result = 100
@@ -2065,7 +2065,7 @@ foreach ($sub in $AllSubscriptions) {
         # Check the type of db; Gremlin, Cassandra and SQL support TTL
         if ($cosmosAcct.capabilities.name -match 'EnableGremlin' ) {
             $gremlinDB = az cosmosdb gremlin database list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup | ConvertFrom-Json -Depth 10
-            $ttl = az cosmosdb gremlin database show --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup --db-name $gremlinDB[0].name | ConvertFrom-Json -Depth 10
+            $ttl = az cosmosdb gremlin database show --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup --name $gremlinDB[0].name | ConvertFrom-Json -Depth 10
             if ($ttl.defaultTtl -ge 1) {
                 $CosmosDBResults += "Good: Time-to-live (TTL) is implemented for CosmosDB account $($cosmosAcct.name)"
                 $cosmosDBControlArray[6].Result = 100
@@ -2097,6 +2097,11 @@ foreach ($sub in $AllSubscriptions) {
         }
         elseif ($cosmosAcct.capabilities.name -match 'EnableTable') {
             $CosmosDBResults += "Informational: Time-to-live (TTL) is not supported for Table API for CosmosDB account $($cosmosAcct.name)"
+            $cosmosDBControlArray[6].Result = 100
+            $cosmosDBControlArray[6].Weight = 0
+        }
+        elseif ($cosmosAcct.capabilities.name -match 'EnableMongoDB') {
+            $CosmosDBResults += "Informational: Time-to-live (TTL) is not supported for MongoDB API for CosmosDB account $($cosmosAcct.name)"
             $cosmosDBControlArray[6].Result = 100
             $cosmosDBControlArray[6].Weight = 0
         }
