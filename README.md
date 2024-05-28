@@ -25,8 +25,9 @@ To use this script, follow these steps:
 2. If you wish to run the script for specific subscriptions, look up their subscriptionId, and add them to an array like this:
 @('b6307584-2248-4e8b-a911-2d7f1bd2613a','c405e642-15db-4786-9426-1e23c84d225a')
 
-Note that if no subscriptionIDs are proviced, subscriptions are currently filtered to check if they match a pattern (name ending in -lz).
-You may want to modify this to a pattern that matches your particular environment, or omit the filter.
+Note that if no subscriptionIDs are provided, the script runs for all subscriptions you have access to.
+If you have access to many subscriptions, the runtime of this script may be extremely long.
+You can use the -Filter param to limit the subscription filter to those matching a provided string.
 
 3. If you wish the results to be written to a file, set the OutputToFile boolean to $true.
 
@@ -37,6 +38,10 @@ You may want to modify this to a pattern that matches your particular environmen
 
 ### Examples
 
-To run the assessment for all subscriptions and generate a report, use the following command:
+To run the assessment for all subscriptions and not generate a report, use the following command:
 
-  .\WAFAzCli.ps1 -ProdOnly $False -OutputToFile $True
+  .\WAFAzCli.ps1 -OutputToFile $False
+
+To run the assessment for all subscriptions matching a string, use the following command:
+
+  .\WAFAzCli.ps1 -Filter '-p-lz'
