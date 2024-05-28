@@ -149,10 +149,8 @@ foreach ($sub in $AllSubscriptions) {
     
     Write-Output "Checking Storage Accounts for subscription $($sub.name)..."
 
-    try {
-        $StorageAccounts = az storage account list 2> $null | ConvertFrom-Json -Depth 10
-    }
-    catch {
+    $StorageAccounts = az storage account list 2> $null | ConvertFrom-Json -Depth 10
+    if (!$?) {
         Write-Error "Unable to retrieve storage accounts for subscription $($sub.name)." -ErrorAction Continue
     }
 
@@ -219,13 +217,14 @@ foreach ($sub in $AllSubscriptions) {
         $StorageResults += ""
         
         # Turn on soft delete for blob data
-        try {
-            $BlobProperties = az storage account blob-service-properties show --account-name $strg.name 2> $null 
+        $BlobProperties = az storage account blob-service-properties show --account-name $strg.name 2> $null 
+        if ($?) {
             $RetentionPolicy = $BlobProperties | ConvertFrom-Json -Depth 10 | Select-Object deleteRetentionPolicy
         }
-        catch {
+        else {
             Write-Error "Unable to check blob data retention settings for storage account $($strg.name)."
         }
+        
         if ($RetentionPolicy.deleteRetentionPolicy.enabled) {
             $StorageResults += "Good: Soft Delete is active for $($strg.name)"
             $strgControlArray[0].Result = 100
@@ -455,11 +454,9 @@ foreach ($sub in $AllSubscriptions) {
 
     Write-Output "Checking Key Vaults for subscription $($sub.name)..."
 
-    try {
-        $Keyvaults = az keyvault list 2> $null | ConvertFrom-Json -Depth 10
-    }
-    catch {
-        Write-Error "Unable to retrieve storage accounts for subscription $($sub.name)." -ErrorAction Continue
+    $Keyvaults = az keyvault list 2> $null | ConvertFrom-Json -Depth 10
+    if (!$?) {
+        Write-Error "Unable to retrieve key vaults for subscription $($sub.name)." -ErrorAction Continue
     }
 
     $KeyvaultControls = @(
@@ -644,10 +641,8 @@ foreach ($sub in $AllSubscriptions) {
 
     Write-Output "Checking Virtual Machines for subscription $($sub.name)..."
     
-    try {
-        $VirtualMachines = az vm list 2> $null | ConvertFrom-Json -Depth 10
-    }
-    catch {
+    $VirtualMachines = az vm list 2> $null | ConvertFrom-Json -Depth 10
+    if (!$?) {
         Write-Error "Unable to retrieve virtual machines for subscription $($sub.name)." -ErrorAction Continue
     }
 
@@ -1016,10 +1011,8 @@ foreach ($sub in $AllSubscriptions) {
 
     Write-Output "Checking App Services for subscription $($sub.name)..."
 
-    try {
-        $AppServices = az webapp list 2> $null | ConvertFrom-Json -Depth 10
-    }
-    catch {
+    $AppServices = az webapp list 2> $null | ConvertFrom-Json -Depth 10
+    if (!$?) {
         Write-Error "Unable to retrieve App Services for subscription $($sub.name)." -ErrorAction Continue
     }
 
@@ -1483,17 +1476,13 @@ foreach ($sub in $AllSubscriptions) {
 
     $PostgreSQLServers = @()
 
-    try {
-        $PostgreSQLServers += az postgres server list 2> $null | ConvertFrom-Json -Depth 10
-    }
-    catch {
+    $PostgreSQLServers += az postgres server list 2> $null | ConvertFrom-Json -Depth 10
+    if (!$?) {
         Write-Error "Unable to retrieve PostgreSQL single servers for subscription $($sub.name)." -ErrorAction Continue
     }
 
-    try {
-        $PostgreSQLServers += az postgres flexible-server list 2> $null | ConvertFrom-Json -Depth 10
-    }
-    catch {
+    $PostgreSQLServers += az postgres flexible-server list 2> $null | ConvertFrom-Json -Depth 10
+    if (!$?) {
         Write-Error "Unable to retrieve PostgreSQL flexible servers for subscription $($sub.name)." -ErrorAction Continue
     }
 
@@ -1530,13 +1519,15 @@ foreach ($sub in $AllSubscriptions) {
 
         $serverStatus = $null
 
-        try{
-            $serverDetails = az postgres server show --name $server.name --resource-group $server.resourceGroup | ConvertFrom-Json -Depth 10
+        $serverDetails = az postgres server show --name $server.name --resource-group $server.resourceGroup | ConvertFrom-Json -Depth 10
+        if ($?) {
             $serverStatus = "single"
         }
-        catch {
+        else {
             $serverDetails = az postgres flexible-server show --name $server.name --resource-group $server.resourceGroup | ConvertFrom-Json -Depth 10
-            $serverStatus = "flexible"
+            if ($?) {
+                $serverStatus = "flexible"
+            }
         }
         
         if (!$serverDetails) {
@@ -1937,10 +1928,8 @@ foreach ($sub in $AllSubscriptions) {
 
     $CosmosDBAccounts = @()
 
-    try {
-        $CosmosDBAccounts += az cosmosdb list 2> $null | ConvertFrom-Json -Depth 10
-    }
-    catch {
+    $CosmosDBAccounts += az cosmosdb list 2> $null | ConvertFrom-Json -Depth 10
+    if (!$?) {
         Write-Error "Unable to retrieve CosmosDB accounts for subscription $($sub.name)." -ErrorAction Continue
     }
 
@@ -2032,8 +2021,8 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Use role-based access control to limit control-plane access to specific identities and groups and within the scope of well-defined assignments
-        try {
-            $roleAssignments = az cosmosdb sql role assignment list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup 2> $null
+        $roleAssignments = az cosmosdb sql role assignment list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup 2> null
+        if ($?) {
             if ($roleAssignments) {
                 $CosmosDBResults += "Good: Role-based access control is used for CosmosDB account $($cosmosAcct.name)"
                 $cosmosDBControlArray[4].Result = 100
@@ -2043,7 +2032,7 @@ foreach ($sub in $AllSubscriptions) {
                 $cosmosDBControlArray[4].Result = 0
             }
         }
-        catch {
+        else {
             $CosmosDBResults += "Informational: Unable to retrieve role assignments for CosmosDB account $($cosmosAcct.name). This is most likely due to the API type not supporting role assignments."
             $cosmosDBControlArray[4].Result = 100
             $cosmosDBControlArray[4].Weight = 0
