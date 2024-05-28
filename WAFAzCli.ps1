@@ -9,9 +9,8 @@
   Optional. An array of IDs for the subscriptions that you want to assess. If no SubscriptionId is entered, the script runs for all subscriptions.
   Example: @('b6307584-2248-4e8b-a911-2d7f1bd2613a', 'c405e642-15db-4786-9426-1e23c84d225a')
 
-.PARAMETER <ProdOnly>
-  Optional. If ProdOnly is true, the script will only evaluate production subscriptions. Note that this param is not evaluated if the SubscriptionIds param is filled.
-  By default, this script runs only for production workloads.
+.PARAMETER <Filter>
+  Optional. If a string is entered here, the script will only evaluate subscriptions where the name matches the given string. Note that this param is not evaluated if the SubscriptionIds param is filled.
 
 .PARAMETER <OutputToFile>
   Optional. If OutputToFile is true, the script will output the results to a file in the results folder.
@@ -27,7 +26,7 @@
   Creation Date:  27/03/2024
   
 .EXAMPLE
-  .\WAFAzCli.ps1 -ProdOnly $True -OutputToFile $False
+  .\WAFAzCli.ps1 -Filter "-p-lz" -OutputToFile $False
   .\WAFAzCli.ps1 -SubscriptionIds @('b6307584-2248-4e8b-a911-2d7f1bd2613a', 'c405e642-15db-4786-9426-1e23c84d225a') -OutputToFile $True
 
 #>
@@ -40,7 +39,7 @@ param
     [Array]$SubscriptionIds,
 
     [Parameter(Mandatory=$false)]
-    $ProdOnly = $true,
+    $Filter,
 
     [Parameter(Mandatory=$false)]
     $OutputToFile = $true
@@ -115,10 +114,10 @@ if (!$azsession) {
 if (!$SubscriptionIds) {
     # Only retrieve FSCP 3.0 subscriptions.
     if ($ProdOnly) {
-        $AllSubscriptions = $azsession | ConvertFrom-Json -Depth 10 | Select-Object name, id | Where-Object {$_.name -Match 'p-lz'}
+        $AllSubscriptions = $azsession | ConvertFrom-Json -Depth 10 | Select-Object name, id | Where-Object {$_.name -Match $Filter}
     }
     else {
-        $AllSubscriptions = $azsession | ConvertFrom-Json -Depth 10 | Select-Object name, id | Where-Object {$_.name -Match '-lz'}
+        $AllSubscriptions = $azsession | ConvertFrom-Json -Depth 10 | Select-Object name, id
     }
 }
 else {
