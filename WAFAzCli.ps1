@@ -1932,6 +1932,256 @@ foreach ($sub in $AllSubscriptions) {
 
     # End region
 
+    #################### Region CosmosDB #####################
+
+    Write-Output "Checking CosmosDB databases for subscription $($sub.name)..."
+
+    $CosmosDBAccounts = @()
+
+    try {
+        $CosmosDBAccounts += az cosmosdb list 2> $null | ConvertFrom-Json -Depth 10
+    }
+    catch {
+        Write-Error "Unable to retrieve CosmosDB accounts for subscription $($sub.name)." -ErrorAction Continue
+    }
+
+    # Define controls for CosmosDB
+    $CosmosDBControls = @(
+        "Distribute your Azure Cosmos DB account across availability zones;Reliability;80"
+        "Configure your Azure Cosmos DB account to span at least two regions;Reliability;70"
+        "Enable service-managed failover for your account;Reliability;80"
+        "Disable public endpoints and use private endpoints whenever possible;Security;90"
+        "Use role-based access control to limit control-plane access to specific identities and groups and within the scope of well-defined assignments;Security;90"
+        "Enable Microsoft Defender for Azure Cosmos DB;Security;90"
+        "Implement time-to-live (TTL) to remove unused items;Cost Optimization;80"
+        "Create alerts associated with host machine resources;Operational Excellence;80"
+        "Create alerts for throughput throttling;Operational Excellence;80"
+        "Restrict default network access;Custom;80"
+    )
+
+    $CosmosDBResults = @()
+    $CosmosDBResults += ""
+
+    $CosmosDBTotalAvg = 0
+    $CosmosDBTotalScore = 0
+
+    foreach ($cosmosAcct in $CosmosDBAccounts) {
+            
+        Write-Output "Checking CosmosDB account $($cosmosAcct.name)..."
+
+        $cosmosDBControlArray = @()
+
+        foreach ($control in $CosmosDBControls) {
+            $cosmosDBCheck = $control.Split(';')
+            $cosmosDBCheckName = $cosmosDBCheck[0]
+            $cosmosDBCheckPillars = $cosmosDBCheck[1].Split(',')
+            $cosmosDBCheckWeight = $cosmosDBCheck[2]
+    
+            $cosmosDBControlArray += [PSCustomObject]@{
+                Name = $cosmosDBCheckName
+                Pillars = $cosmosDBCheckPillars
+                Weight = $cosmosDBCheckWeight
+                Result = $null
+            }
+        }
+
+        # Calculate total weight to calculate weighted average
+        $cosmosDBTotalWeight = Get-TotalWeights($cosmosDBControlArray)
+
+        $CosmosDBResults += ""
+        $CosmosDBResults += "----- CosmosDB Account - $($cosmosAcct.name) -----"
+        $CosmosDBResults += ""
+
+        # Distribute your Azure Cosmos DB account across availability zones
+        if ($cosmosAcct.enableMultipleWriteLocations -match 'True') {
+            $CosmosDBResults += "Good: Azure Cosmos DB account is distributed across availability zones for CosmosDB account $($cosmosAcct.name)"
+            $cosmosDBControlArray[0].Result = 100
+        }
+        else {
+            $CosmosDBResults += "Bad: Azure Cosmos DB account is NOT distributed across availability zones for CosmosDB account $($cosmosAcct.name)"
+            $cosmosDBControlArray[0].Result = 0
+        }
+
+        # Configure your Azure Cosmos DB account to span at least two regions
+        if ($cosmosAcct.locations.Count -ge 2) {
+            $CosmosDBResults += "Good: Azure Cosmos DB account spans at least two regions for CosmosDB account $($cosmosAcct.name)"
+            $cosmosDBControlArray[1].Result = 100
+        }
+        else {
+            $CosmosDBResults += "Bad: Azure Cosmos DB account does NOT span at least two regions for CosmosDB account $($cosmosAcct.name)"
+            $cosmosDBControlArray[1].Result = 0
+        }
+
+        # Enable service-managed failover for your account
+        if ($cosmosAcct.enableAutomaticFailover -match 'True') {
+            $CosmosDBResults += "Good: Service-managed failover is enabled for CosmosDB account $($cosmosAcct.name)"
+            $cosmosDBControlArray[2].Result = 100
+        }
+        else {
+            $CosmosDBResults += "Bad: Service-managed failover is NOT enabled for CosmosDB account $($cosmosAcct.name)"
+            $cosmosDBControlArray[2].Result = 0
+        }
+
+        # Disable public endpoints and use private endpoints whenever possible
+        if ($cosmosAcct.publicNetworkAccess -match 'Disabled') {
+            $CosmosDBResults += "Good: Public endpoints are disabled for CosmosDB account $($cosmosAcct.name)"
+            $cosmosDBControlArray[3].Result = 100
+        }
+        else {
+            $CosmosDBResults += "Bad: Public endpoints are NOT disabled for CosmosDB account $($cosmosAcct.name)"
+            $cosmosDBControlArray[3].Result = 0
+        }
+
+        # Use role-based access control to limit control-plane access to specific identities and groups and within the scope of well-defined assignments
+        try {
+            $roleAssignments = az cosmosdb sql role assignment list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup
+            if ($roleAssignments) {
+                $CosmosDBResults += "Good: Role-based access control is used for CosmosDB account $($cosmosAcct.name)"
+                $cosmosDBControlArray[4].Result = 100
+            }
+            else {
+                $CosmosDBResults += "Bad: Role-based access control is NOT used for CosmosDB account $($cosmosAcct.name)"
+                $cosmosDBControlArray[4].Result = 0
+            }
+        }
+        catch {
+            $CosmosDBResults += "Informational: Unable to retrieve role assignments for CosmosDB account $($cosmosAcct.name). This is most likely due to the API type not supporting role assignments."
+            $cosmosDBControlArray[4].Result = 100
+            $cosmosDBControlArray[4].Weight = 0
+        }
+
+        # Enable Microsoft Defender for Azure Cosmos DB
+        $defenderStatus = az security atp cosmosdb show --cosmosdb-account $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup | ConvertFrom-Json -Depth 10
+        if ($defenderStatus.isEnabled) {
+            $CosmosDBResults += "Good: Microsoft Defender is enabled for CosmosDB account $($cosmosAcct.name)"
+            $cosmosDBControlArray[5].Result = 100
+        }
+        else {
+            $CosmosDBResults += "Bad: Microsoft Defender is NOT enabled for CosmosDB account $($cosmosAcct.name)"
+            $cosmosDBControlArray[5].Result = 0
+        }
+
+        # Implement time-to-live (TTL) to remove unused items
+        # Check the type of db; Gremlin, Cassandra and SQL support TTL
+        if ($cosmosAcct.capabilities.name -match 'EnableGremlin' ) {
+            $gremlinDB = az cosmosdb gremlin database list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup | ConvertFrom-Json -Depth 10
+            $ttl = az cosmosdb gremlin database show --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup --db-name $gremlinDB[0].name | ConvertFrom-Json -Depth 10
+            if ($ttl.defaultTtl -ge 1) {
+                $CosmosDBResults += "Good: Time-to-live (TTL) is implemented for CosmosDB account $($cosmosAcct.name)"
+                $cosmosDBControlArray[6].Result = 100
+            }
+            else {
+                $CosmosDBResults += "Bad: Time-to-live (TTL) is NOT implemented for CosmosDB account $($cosmosAcct.name)"
+                $cosmosDBControlArray[6].Result = 0
+            }
+        }
+        elseif ($cosmosAcct.capabilities.name -match 'EnableCassandra') {
+            $cassandraDB = az cosmosdb cassandra keyspace list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup | ConvertFrom-Json -Depth 10
+            $cassandraTable = az cosmosdb cassandra table list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup --keyspace-name $cassandraDB[0].name | ConvertFrom-Json -Depth 10
+            if ($cassandraTable.length -ge 1) {
+                $ttl = az cosmosdb cassandra table show --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup --keyspace-name $cassandraDB[0].name --name $cassandraTable[0].name | ConvertFrom-Json -Depth 10
+                if ($ttl.defaultTtl -ge 1) {
+                    $CosmosDBResults += "Good: Time-to-live (TTL) is implemented for CosmosDB account $($cosmosAcct.name)"
+                    $cosmosDBControlArray[6].Result = 100
+                }
+                else {
+                    $CosmosDBResults += "Bad: Time-to-live (TTL) is NOT implemented for CosmosDB account $($cosmosAcct.name)"
+                    $cosmosDBControlArray[6].Result = 0
+                }
+            }
+            else {
+                $CosmosDBResults += "Informational: No table found for Cassandra DB for CosmosDB account $($cosmosAcct.name)"
+                $cosmosDBControlArray[6].Result = 100
+                $cosmosDBControlArray[6].Weight = 0
+            }
+        }
+        elseif ($cosmosAcct.capabilities.name -match 'EnableTable') {
+            $CosmosDBResults += "Informational: Time-to-live (TTL) is not supported for Table API for CosmosDB account $($cosmosAcct.name)"
+            $cosmosDBControlArray[6].Result = 100
+            $cosmosDBControlArray[6].Weight = 0
+        }
+        else {
+            $sqlDB = az cosmosdb sql database list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup | ConvertFrom-Json -Depth 10
+            $sqlContainer = az cosmosdb sql container list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup --db-name $sqlDB[0].name | ConvertFrom-Json -Depth 10
+            if ($sqlContainer.length -ge 1) {
+                $ttl = az cosmosdb sql container show --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup --db-name $sqlDB[0].name --name $sqlContainer[0].name | ConvertFrom-Json -Depth 10
+                if ($ttl.defaultTtl -ge 1) {
+                    $CosmosDBResults += "Good: Time-to-live (TTL) is implemented for CosmosDB account $($cosmosAcct.name)"
+                    $cosmosDBControlArray[6].Result = 100
+                }
+                else {
+                    $CosmosDBResults += "Bad: Time-to-live (TTL) is NOT implemented for CosmosDB account $($cosmosAcct.name)"
+                    $cosmosDBControlArray[6].Result = 0
+                }
+            }
+            else {
+                $CosmosDBResults += "Informational: No container found for SQL DB for CosmosDB account $($cosmosAcct.name)"
+                $cosmosDBControlArray[6].Result = 100
+                $cosmosDBControlArray[6].Weight = 0
+            }
+        }
+
+        # Create alerts associated with host machine resources (Currently binary yes/no check, needs to be updated to check for specific alerts)
+        $hostAlerts = az monitor metrics alert list --resource $cosmosAcct.id --resource-group $cosmosAcct.resourceGroup
+        if ($hostAlerts) {
+            $CosmosDBResults += "Good: Alerts are created for host machine resources for CosmosDB account $($cosmosAcct.name)"
+            $cosmosDBControlArray[7].Result = 100
+        }
+        else {
+            $CosmosDBResults += "Bad: Alerts are NOT created for host machine resources for CosmosDB account $($cosmosAcct.name)"
+            $cosmosDBControlArray[7].Result = 0
+        }
+
+        # Create alerts for throughput throttling (Currently binary yes/no check, needs to be updated to check for specific alerts)
+        $throttleAlerts = az monitor metrics alert list --resource $cosmosAcct.id --resource-group $cosmosAcct.resourceGroup
+        if ($throttleAlerts) {
+            $CosmosDBResults += "Good: Alerts are created for throughput throttling for CosmosDB account $($cosmosAcct.name)"
+            $cosmosDBControlArray[8].Result = 100
+        }
+        else {
+            $CosmosDBResults += "Bad: Alerts are NOT created for throughput throttling for CosmosDB account $($cosmosAcct.name)"
+            $cosmosDBControlArray[8].Result = 0
+        }
+
+        # Restrict default network access
+        if ($cosmosAcct.publicNetworkAccess -match 'Disabled') {
+            $CosmosDBResults += "Good: Default network access is restricted for CosmosDB account $($cosmosAcct.name)"
+            $cosmosDBControlArray[9].Result = 100
+        }
+        else {
+            $CosmosDBResults += "Bad: Default network access is NOT restricted for CosmosDB account $($cosmosAcct.name)"
+            $cosmosDBControlArray[9].Result = 0
+        }
+        
+    }
+
+    # Calculate the weighted average for the CosmosDB account
+    $cosmosDBScore = $cosmosDBControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
+    $cosmosDBAvgScore = $cosmosDBScore / $cosmosDBTotalWeight
+    $roundedCosmosDBAvg = [math]::Round($cosmosDBAvgScore, 1)
+
+    $CosmosDBResults += ""
+    $CosmosDBResults += "CosmosDB account $($cosmosAcct.name) has an average score of $roundedCosmosDBAvg %."
+    $CosmosDBResults += ""
+
+    $CosmosDBTotalScore += $cosmosDBScore
+
+    if ($CosmosDBAccounts.Count -gt 0) {
+        $CosmosDBTotalAvg = $CosmosDBTotalScore / ($cosmosDBTotalWeight * $CosmosDBAccounts.Count)
+        $roundedCosmosDBTotalAvg = [math]::Round($CosmosDBTotalAvg, 1)
+
+        $lateReport += "Total average score for all CosmosDB accounts in subscription $($sub.name) is $roundedCosmosDBTotalAvg %."
+    }
+    else {
+        $CosmosDBResults += ""
+        $CosmosDBResults += "No CosmosDB accounts found for subscription $($sub.name)."
+        $CosmosDBResults += ""
+    }
+
+    $WAFResults += $CosmosDBResults
+
+    # End region
+
     ############### Region Score by Pillars ##################
 
     $allWeightedAverages = @()
@@ -1969,6 +2219,13 @@ foreach ($sub in $AllSubscriptions) {
         $allPostgreSQLWeightedAverages = Get-AllWeightedAveragesPerService($postgreSQLControlArray)
         foreach ($postgreSQLWeightedAverage in $allPostgreSQLWeightedAverages) {
             $allWeightedAverages += $postgreSQLWeightedAverage
+        }
+    }
+
+    if ($CosmosDBControlArray) {
+        $allCosmosDBWeightedAverages = Get-AllWeightedAveragesPerService($cosmosDBControlArray)
+        foreach ($cosmosDBWeightedAverage in $allCosmosDBWeightedAverages) {
+            $allWeightedAverages += $cosmosDBWeightedAverage
         }
     }
 
