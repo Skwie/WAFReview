@@ -141,6 +141,7 @@ foreach ($sub in $AllSubscriptions) {
 
     $WAFResults = @()
     $lateReport = @()
+    $WAFResults += ""
     $WAFResults += "#################################################################################"
     $WAFResults += "WAF Assessment results for subscription $($sub.name)"
     $WAFResults += "#################################################################################"
@@ -430,7 +431,6 @@ foreach ($sub in $AllSubscriptions) {
 
         $StorageResults += ""
         $StorageResults += "Storage Account $($strg.name) has an average score of $roundedStorageAvg %."
-        $StorageResults += ""
 
         $storageTotalScore += $storageScore
     }
@@ -473,7 +473,6 @@ foreach ($sub in $AllSubscriptions) {
     )
 
     $VaultResults = @()
-    $VaultResults += ""
     $VaultResults += "#####################################"
     $VaultResults += "WAF Assessment Results for Key Vaults"
     $VaultResults += "#####################################"
@@ -615,7 +614,6 @@ foreach ($sub in $AllSubscriptions) {
 
         $VaultResults += ""
         $VaultResults += "Key Vault $($keyvault.name) has an average score of $roundedKvAvg %."
-        $VaultResults += ""
 
         $kvTotalScore += $kvScore
     }
@@ -987,7 +985,6 @@ foreach ($sub in $AllSubscriptions) {
 
         $VMResults += ""
         $VMResults += "Virtual Machine $($vm.name) has an average score of $roundedVmAvg %."
-        $VMResults += ""
 
         $vmTotalScore += $vmScore
     }
@@ -1450,7 +1447,6 @@ foreach ($sub in $AllSubscriptions) {
 
         $AppServiceResults += ""
         $AppServiceResults += "App Service $($appservice.name) has an average score of $roundedAppServiceAvg %."
-        $AppServiceResults += ""
 
         $appServiceTotalScore += $appServiceScore
     }
@@ -1905,7 +1901,6 @@ foreach ($sub in $AllSubscriptions) {
 
         $PostgreSQLResults += ""
         $PostgreSQLResults += "PostgreSQL server $($server.name) has an average score of $roundedPostgreSQLAvg %."
-        $PostgreSQLResults += ""
 
         $PostgreSQLTotalScore += $postgreSQLScore
     }
@@ -2153,18 +2148,16 @@ foreach ($sub in $AllSubscriptions) {
             $cosmosDBControlArray[9].Result = 0
         }
         
+        # Calculate the weighted average for the CosmosDB account
+        $cosmosDBScore = $cosmosDBControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
+        $cosmosDBAvgScore = $cosmosDBScore / $cosmosDBTotalWeight
+        $roundedCosmosDBAvg = [math]::Round($cosmosDBAvgScore, 1)
+
+        $CosmosDBResults += ""
+        $CosmosDBResults += "CosmosDB account $($cosmosAcct.name) has an average score of $roundedCosmosDBAvg %."
+
+        $CosmosDBTotalScore += $cosmosDBScore
     }
-
-    # Calculate the weighted average for the CosmosDB account
-    $cosmosDBScore = $cosmosDBControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
-    $cosmosDBAvgScore = $cosmosDBScore / $cosmosDBTotalWeight
-    $roundedCosmosDBAvg = [math]::Round($cosmosDBAvgScore, 1)
-
-    $CosmosDBResults += ""
-    $CosmosDBResults += "CosmosDB account $($cosmosAcct.name) has an average score of $roundedCosmosDBAvg %."
-    $CosmosDBResults += ""
-
-    $CosmosDBTotalScore += $cosmosDBScore
 
     if ($CosmosDBAccounts.Count -gt 0) {
         $CosmosDBTotalAvg = $CosmosDBTotalScore / ($cosmosDBTotalWeight * $CosmosDBAccounts.Count)
@@ -2230,7 +2223,7 @@ foreach ($sub in $AllSubscriptions) {
 
         $aksControlArray = @()
 
-        $clusterDetails = az aks show --name $aksCluster.name --resource-group $aksCluster.resourceGroup | ConvertFrom-Json -Depth 10
+        $clusterDetails = az aks show --name $aksCluster.name --resource-group $aksCluster.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
 
         foreach ($control in $AKSControls) {
             $aksCheck = $control.Split(';')
@@ -2393,7 +2386,7 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Ensure that AKS clusters are using the latest available version of Kubernetes software
-        $aksVersionStatus = az aks get-upgrades --name $aksCluster.name --resource-group $aksCluster.resourceGroup | ConvertFrom-Json -Depth 10
+        $aksVersionStatus = az aks get-upgrades --name $aksCluster.name --resource-group $aksCluster.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
         $latestVersion = $true
         foreach ($upgrade in $aksVersionStatus.controlPlaneProfile.upgrades) {
             if ($upgrade.kubernetesVersion -gt $aksVersionStatus.controlPlaneProfile.kubernetesVersion) {
@@ -2441,18 +2434,16 @@ foreach ($sub in $AllSubscriptions) {
             $aksControlArray[16].Result = 0
         }
 
+        # Calculate the weighted average for the AKS cluster
+        $aksScore = $aksControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
+        $aksAvgScore = $aksScore / $aksTotalWeight
+        $roundedAKSAvg = [math]::Round($aksAvgScore, 1)
+
+        $AKSResults += ""
+        $AKSResults += "AKS cluster $($aksCluster.name) has an average score of $roundedAKSAvg %."
+
+        $AKSTotalScore += $aksScore
     }
-
-    # Calculate the weighted average for the AKS cluster
-    $aksScore = $aksControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
-    $aksAvgScore = $aksScore / $aksTotalWeight
-    $roundedAKSAvg = [math]::Round($aksAvgScore, 1)
-
-    $AKSResults += ""
-    $AKSResults += "AKS cluster $($aksCluster.name) has an average score of $roundedAKSAvg %."
-    $AKSResults += ""
-
-    $AKSTotalScore += $aksScore
 
     if ($AKSClusters.Count -gt 0) {
         $AKSTotalAvg = $AKSTotalScore / ($aksTotalWeight * $AKSClusters.Count)
