@@ -21,9 +21,10 @@
   Possible ToDo is to make the file output compatible with the Microsoft powerpoint generation script.
 
 .NOTES
-  Version:        0.1
+  Version:        0.8
   Author:         Jordy Groenewoud
   Creation Date:  27/03/2024
+  Last Updated:   11/06/2024
   
 .EXAMPLE
   .\WAFAzCli.ps1 -Filter "-p-lz" -OutputToFile $False
@@ -1509,6 +1510,9 @@ foreach ($sub in $AllSubscriptions) {
 
     $PostgreSQLResults = @()
     $PostgreSQLResults += ""
+    $PostgreSQLResults += "#####################################"
+    $PostgreSQLResults += "WAF Assessment Results for PostgreSQL"
+    $PostgreSQLResults += "#####################################"
 
     $PostgreSQLTotalAvg = 0
     $PostgreSQLTotalScore = 0
@@ -1949,6 +1953,9 @@ foreach ($sub in $AllSubscriptions) {
 
     $CosmosDBResults = @()
     $CosmosDBResults += ""
+    $CosmosDBResults += "###################################"
+    $CosmosDBResults += "WAF Assessment Results for CosmosDB"
+    $CosmosDBResults += "###################################"
 
     $CosmosDBTotalAvg = 0
     $CosmosDBTotalScore = 0
@@ -2021,7 +2028,7 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Use role-based access control to limit control-plane access to specific identities and groups and within the scope of well-defined assignments
-        $roleAssignments = az cosmosdb sql role assignment list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup 2> null
+        $roleAssignments = az cosmosdb sql role assignment list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup 2> $null
         if ($?) {
             if ($roleAssignments) {
                 $CosmosDBResults += "Good: Role-based access control is used for CosmosDB account $($cosmosAcct.name)"
@@ -2175,6 +2182,294 @@ foreach ($sub in $AllSubscriptions) {
 
     # End region
 
+    ###################### Region AKS ########################
+
+    Write-Output "Checking AKS clusters for subscription $($sub.name)..."
+
+    $AKSClusters = @()
+
+    $AKSClusters += az aks list 2> $null | ConvertFrom-Json -Depth 10
+    if (!$?) {
+        Write-Error "Unable to retrieve AKS clusters for subscription $($sub.name)." -
+        ErrorAction Continue
+    }
+
+    # Define controls for AKS
+    $AKSControls = @(
+        "Use availability zones to maximize resilience within an Azure region;Reliability;80"
+        "Use Microsoft Entra integration;Security;90"
+        "Authenticate with Microsoft Entra ID to Azure Container Registry;Security;90"
+        "Secure network traffic to your API server with private AKS cluster;Security;90"
+        "Protect the API server with Microsoft Entra RBAC;Security;90"
+        "Use Azure network policies or Calico;Security;90"
+        "Secure clusters and pods with Azure Policy;Security;90"
+        "Secure container access to resources;Security;90"
+        "Control cluster egress traffic;Security;90"
+        "Use Microsoft Defender for Containers;Security;90"
+        "Enable Cluster Autoscaler to automatically reduce the number of agent nodes in response to excess resource capacity;Cost Optimization,Performance Efficiency;80"
+        "Enable Node Autoprovision to automate VM SKU selection;Cost Optimization;80"
+        "Separate workloads into different node pools and consider scaling user node pools;Performance Efficiency;80"
+        "Ensure that AKS clusters are using the latest available version of Kubernetes software;Security,Reliability;80"
+        "Ensure that public access to Kubernetes API server is restricted;Security;90"
+        "Ensure that AKS clusters are configured to use the Network Contributor role;Security;90"
+        "Ensure that Azure Kubernetes clusters are using a private Key Vault for secret data encryption;Security;90"   
+    )
+
+    $AKSResults = @()
+    $AKSResults += ""
+    $AKSResults += "##############################"
+    $AKSResults += "WAF Assessment Results for AKS"
+    $AKSResults += "##############################"
+
+    $AKSTotalAvg = 0
+    $AKSTotalScore = 0
+
+    foreach ($aksCluster in $AKSClusters) {
+            
+        Write-Output "Checking AKS cluster $($aksCluster.name)..."
+
+        $aksControlArray = @()
+
+        $clusterDetails = az aks show --name $aksCluster.name --resource-group $aksCluster.resourceGroup | ConvertFrom-Json -Depth 10
+
+        foreach ($control in $AKSControls) {
+            $aksCheck = $control.Split(';')
+            $aksCheckName = $aksCheck[0]
+            $aksCheckPillars = $aksCheck[1].Split(',')
+            $aksCheckWeight = $aksCheck[2]
+    
+            $aksControlArray += [PSCustomObject]@{
+                Name = $aksCheckName
+                Pillars = $aksCheckPillars
+                Weight = $aksCheckWeight
+                Result = $null
+            }
+        }
+
+        # Calculate total weight to calculate weighted average
+        $aksTotalWeight = Get-TotalWeights($aksControlArray)
+
+        $AKSResults += ""
+        $AKSResults += "----- AKS Cluster - $($aksCluster.name) -----"
+        $AKSResults += ""
+
+        # Use availability zones to maximize resilience within an Azure region
+        if ($aksCluster.agentPoolProfiles.availabilityZones) {
+            $AKSResults += "Good: Availability zones are used to maximize resilience within an Azure region for AKS cluster $($aksCluster.name)"
+            $aksControlArray[0].Result = 100
+        }
+        else {
+            $AKSResults += "Bad: Availability zones are NOT used to maximize resilience within an Azure region for AKS cluster $($aksCluster.name)"
+            $aksControlArray[0].Result = 0
+        }
+
+        # Use Microsoft Entra integration
+        if ($clusterDetails.aadProfile.tenantId) {
+            $AKSResults += "Good: Microsoft Entra integration is used for AKS cluster $($aksCluster.name)"
+            $aksControlArray[1].Result = 100
+        }
+        else {
+            $AKSResults += "Bad: Microsoft Entra integration is NOT used for AKS cluster $($aksCluster.name)"
+            $aksControlArray[1].Result = 0
+        }
+
+        # Authenticate with Microsoft Entra ID to Azure Container Registry
+        $acrEnabled = $false
+        $acrs = az acr list 2> $null | ConvertFrom-Json -Depth 10
+        if ($acrs) {
+            foreach ($acr in $acrs) {
+                az aks check-acr --name $aksCluster.name --resource-group $aksCluster.resourceGroup --acr $acr.name 2> $null
+                if ($?) {
+                    $acrEnabled = $true
+                    $AKSResults += "Good: Microsoft Entra ID is used to authenticate with Azure Container Registry for AKS cluster $($aksCluster.name)"
+                    $aksControlArray[2].Result = 100
+                    break
+                }
+            }
+        }
+        if (!$acrEnabled) {
+            $AKSResults += "Bad: Microsoft Entra ID is NOT used to authenticate with Azure Container Registry for AKS cluster $($aksCluster.name)"
+            $aksControlArray[2].Result = 0
+        }
+
+        # Secure network traffic to your API server with private AKS cluster
+        if ($clusterDetails.apiServerAccessProfile.enablePrivateCluster -match "True") {
+            $AKSResults += "Good: Network traffic to the API server is secured with a private AKS cluster for AKS cluster $($aksCluster.name)"
+            $aksControlArray[3].Result = 100
+        }
+        else {
+            $AKSResults += "Bad: Network traffic to the API server is NOT secured with a private AKS cluster for AKS cluster $($aksCluster.name)"
+            $aksControlArray[3].Result = 0
+        }
+
+        # Protect the API server with Microsoft Entra RBAC
+        if ($clusterDetails.disableLocalAccounts -match "True") {
+            $AKSResults += "Good: API server is protected with Microsoft Entra RBAC for AKS cluster $($aksCluster.name)"
+            $aksControlArray[4].Result = 100
+        }
+        else {
+            $AKSResults += "Bad: API server is NOT protected with Microsoft Entra RBAC for AKS cluster $($aksCluster.name)"
+            $aksControlArray[4].Result = 0
+        }
+
+        # Use Azure network policies or Calico
+        if ($clusterDetails.networkProfile.networkPolicy -match "Azure" -or $clusterDetails.networkProfile.networkPlugin -match "calico") {
+            $AKSResults += "Good: Azure/Calico network policies are used for AKS cluster $($aksCluster.name)"
+            $aksControlArray[5].Result = 100
+        }
+        else {
+            $AKSResults += "Bad: Azure/Calico network policies are NOT used for AKS cluster $($aksCluster.name)"
+            $aksControlArray[5].Result = 0
+        }
+
+        # Secure clusters and pods with Azure Policy
+        if ($clusterDetails.enablePodSecurityPolicy -match "True") {
+            $AKSResults += "Good: Clusters and pods are secured with Azure Policy for AKS cluster $($aksCluster.name)"
+            $aksControlArray[6].Result = 100
+        }
+        else {
+            $AKSResults += "Bad: Clusters and pods are NOT secured with Azure Policy for AKS cluster $($aksCluster.name)"
+            $aksControlArray[6].Result = 0
+        }
+
+        # Secure container access to resources
+        if ($clusterDetails.aadProfile.enableAzureRbac -match "True") {
+            $AKSResults += "Good: Container access to resources is secured for AKS cluster $($aksCluster.name)"
+            $aksControlArray[7].Result = 100
+        }
+        else {
+            $AKSResults += "Bad: Container access to resources is NOT secured for AKS cluster $($aksCluster.name)"
+            $aksControlArray[7].Result = 0
+        }
+
+        # Control cluster egress traffic
+        if ($clusterDetails.networkProfile.networkPlugin -match "azure") {
+            $AKSResults += "Good: Cluster egress traffic is controlled for AKS cluster $($aksCluster.name)"
+            $aksControlArray[8].Result = 100
+        }
+        else {
+            $AKSResults += "Bad: Cluster egress traffic is NOT controlled for AKS cluster $($aksCluster.name)"
+            $aksControlArray[8].Result = 0
+        }
+
+        # Use Microsoft Defender for Containers
+        if ($clusterDetails.securityProfile.defender) {
+            $AKSResults += "Good: Microsoft Defender for Containers is used for AKS cluster $($aksCluster.name)"
+            $aksControlArray[9].Result = 100
+        }
+        else {
+            $AKSResults += "Bad: Microsoft Defender for Containers is NOT used for AKS cluster $($aksCluster.name)"
+            $aksControlArray[9].Result = 0
+        }
+
+        # Enable Cluster Autoscaler to automatically reduce the number of agent nodes in response to excess resource capacity
+        if ($clusterDetails.autoScalerProfile.scaleDown) {
+            $AKSResults += "Good: Cluster Autoscaler is enabled for AKS cluster $($aksCluster.name)"
+            $aksControlArray[10].Result = 100
+        }
+        else {
+            $AKSResults += "Bad: Cluster Autoscaler is NOT enabled for AKS cluster $($aksCluster.name)"
+            $aksControlArray[10].Result = 0
+        }
+
+        # Enable Node Autoprovision to automate VM SKU selection
+        if ($clusterDetails.nodeProvisioningProfile.mode -match "auto") {
+            $AKSResults += "Good: Node Autoprovision is enabled for AKS cluster $($aksCluster.name)"
+            $aksControlArray[11].Result = 100
+        }
+        else {
+            $AKSResults += "Bad: Node Autoprovision is NOT enabled for AKS cluster $($aksCluster.name)"
+            $aksControlArray[11].Result = 0
+        }
+
+        # Separate workloads into different node pools and consider scaling user node pools
+        if ($clusterDetails.agentPoolProfiles.mode -match "User") {
+            $AKSResults += "Good: Workloads are set to User mode and thus scaleable for AKS cluster $($aksCluster.name)"
+            $aksControlArray[12].Result = 100
+        }
+        else {
+            $AKSResults += "Bad: Workloads are NOT set to User mode and thus not scaleable for AKS cluster $($aksCluster.name)"
+            $aksControlArray[12].Result = 0
+        }
+
+        # Ensure that AKS clusters are using the latest available version of Kubernetes software
+        $aksVersionStatus = az aks get-upgrades --name $aksCluster.name --resource-group $aksCluster.resourceGroup | ConvertFrom-Json -Depth 10
+        $latestVersion = $true
+        foreach ($upgrade in $aksVersionStatus.controlPlaneProfile.upgrades) {
+            if ($upgrade.kubernetesVersion -gt $aksVersionStatus.controlPlaneProfile.kubernetesVersion) {
+                $latestVersion = $false
+                break
+            }
+        }
+        if ($latestVersion) {
+            $AKSResults += "Good: AKS cluster is using the latest available version of Kubernetes software for AKS cluster $($aksCluster.name)"
+            $aksControlArray[13].Result = 100
+        }
+        else {
+            $AKSResults += "Bad: AKS cluster is NOT using the latest available version of Kubernetes software for AKS cluster $($aksCluster.name)"
+            $aksControlArray[13].Result = 0
+        }
+
+        # Ensure that public access to Kubernetes API server is restricted
+        if ($clusterDetails.apiServerAccessProfile.authorizedIpRanges) {
+            $AKSResults += "Good: Public access to Kubernetes API server is restricted for AKS cluster $($aksCluster.name)"
+            $aksControlArray[14].Result = 100
+        }
+        else {
+            $AKSResults += "Bad: Public access to Kubernetes API server is NOT restricted for AKS cluster $($aksCluster.name)"
+            $aksControlArray[14].Result = 0
+        }
+
+        # Ensure that AKS clusters are configured to use the Network Contributor role
+        $networkRole = az role assignment list --scope $aksCluster.id --role "Network Contributor" 2> $null
+        if ($networkRole) {
+            $AKSResults += "Good: AKS cluster is configured to use the Network Contributor role for AKS cluster $($aksCluster.name)"
+            $aksControlArray[15].Result = 100
+        }
+        else {
+            $AKSResults += "Bad: AKS cluster is NOT configured to use the Network Contributor role for AKS cluster $($aksCluster.name)"
+            $aksControlArray[15].Result = 0
+        }
+
+        # Ensure that Azure Kubernetes clusters are using a private Key Vault for secret data encryption
+        if ($clusterDetails.securityProfile.azureKeyVaultKms.keyvaultNetworkAccess -and $clusterDetails.securityProfile.azureKeyVaultKms.keyvaultNetworkAccess -notmatch "Public") {
+            $AKSResults += "Good: Azure Kubernetes clusters are using a private Key Vault for secret data encryption for AKS cluster $($aksCluster.name)"
+            $aksControlArray[16].Result = 100
+        }
+        else {
+            $AKSResults += "Bad: Azure Kubernetes clusters are NOT using a private Key Vault for secret data encryption for AKS cluster $($aksCluster.name)"
+            $aksControlArray[16].Result = 0
+        }
+
+    }
+
+    # Calculate the weighted average for the AKS cluster
+    $aksScore = $aksControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
+    $aksAvgScore = $aksScore / $aksTotalWeight
+    $roundedAKSAvg = [math]::Round($aksAvgScore, 1)
+
+    $AKSResults += ""
+    $AKSResults += "AKS cluster $($aksCluster.name) has an average score of $roundedAKSAvg %."
+    $AKSResults += ""
+
+    $AKSTotalScore += $aksScore
+
+    if ($AKSClusters.Count -gt 0) {
+        $AKSTotalAvg = $AKSTotalScore / ($aksTotalWeight * $AKSClusters.Count)
+        $roundedAKSTotalAvg = [math]::Round($AKSTotalAvg, 1)
+
+        $lateReport += "Total average score for all AKS clusters in subscription $($sub.name) is $roundedAKSTotalAvg %."
+    }
+    else {
+        $AKSResults += ""
+        $AKSResults += "No AKS clusters found for subscription $($sub.name)."
+        $AKSResults += ""
+    }
+
+    $WAFResults += $AKSResults
+
+    # End region
+
     ############### Region Score by Pillars ##################
 
     $allWeightedAverages = @()
@@ -2219,6 +2514,13 @@ foreach ($sub in $AllSubscriptions) {
         $allCosmosDBWeightedAverages = Get-AllWeightedAveragesPerService($cosmosDBControlArray)
         foreach ($cosmosDBWeightedAverage in $allCosmosDBWeightedAverages) {
             $allWeightedAverages += $cosmosDBWeightedAverage
+        }
+    }
+
+    if ($AKSControlArray) {
+        $allAKSWeightedAverages = Get-AllWeightedAveragesPerService($aksControlArray)
+        foreach ($aksWeightedAverage in $allAKSWeightedAverages) {
+            $allWeightedAverages += $aksWeightedAverage
         }
     }
 
