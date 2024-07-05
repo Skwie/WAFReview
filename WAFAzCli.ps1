@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Performs an Azure Well-Architected Framework assessment for one or more subscriptions
+  Performs an Azure Well-Architected Framework assessment for one or more subscriptions.
 
 .DESCRIPTION
   This script makes an inventory of specific or all fscp 3.0 subscriptions, and runs AZ CLI commands against those subscriptions to determine if resources in those subscriptions are in line with the Microsoft Azure Well-Architected Framework.
@@ -21,10 +21,10 @@
   Possible ToDo is to make the file output compatible with the Microsoft powerpoint generation script.
 
 .NOTES
-  Version:        0.8
+  Version:        0.8.1
   Author:         Jordy Groenewoud
   Creation Date:  27/03/2024
-  Last Updated:   11/06/2024
+  Last Updated:   05/07/2024
   
 .EXAMPLE
   .\WAFAzCli.ps1 -Filter "-p-lz" -OutputToFile $False
@@ -113,7 +113,7 @@ if (!$azsession) {
 }
 
 if (!$SubscriptionIds) {
-    # Only retrieve FSCP 3.0 subscriptions.
+    # Only retrieve FSCP 3.0 subscriptions
     if ($ProdOnly) {
         $AllSubscriptions = $azsession | ConvertFrom-Json -Depth 10 | Select-Object name, id | Where-Object {$_.name -Match $Filter}
     }
@@ -473,6 +473,7 @@ foreach ($sub in $AllSubscriptions) {
     )
 
     $VaultResults = @()
+    $VaultResults += ""
     $VaultResults += "#####################################"
     $VaultResults += "WAF Assessment Results for Key Vaults"
     $VaultResults += "#####################################"
@@ -2461,6 +2462,146 @@ foreach ($sub in $AllSubscriptions) {
 
     # End region
 
+    ################# Region Azure OpenAI ####################
+
+    Write-Output "Checking Azure OpenAI resources for subscription $($sub.name)..."
+
+    $OpenAIResources = @()
+
+    $OpenAIResources += az cognitiveservices account list 2> $null | ConvertFrom-Json -Depth 10 | Where-Object { $_.kind -match "OpenAI" }
+    if (!$?) {
+        Write-Error "Unable to retrieve Azure OpenAI resources for subscription $($sub.name)." -
+        ErrorAction Continue
+    }
+
+    # Define controls for Azure OpenAI
+    $OpenAIControls = @(
+        "Disable public access to Azure OpenAI unless your workload requires it;Security;90"
+        "Use customer-managed keys for fine-tuned models and training data that's uploaded to Azure OpenAI;Security;80"
+        "Enable and configure Diagnostics for the Azure OpenAI Service;Operational Excellence;80"
+        "Ensure that Azure OpenAI service instances don't have administrative privileges;Custom;90"
+    )
+
+    $OpenAIResults = @()
+    $OpenAIResults += ""
+    $OpenAIResults += "#######################################"
+    $OpenAIResults += "WAF Assessment Results for Azure OpenAI"
+    $OpenAIResults += "#######################################"
+
+    $OpenAITotalAvg = 0
+    $OpenAITotalScore = 0
+
+    foreach ($openAIResource in $OpenAIResources) {
+            
+        Write-Output "Checking Azure OpenAI resource $($openAIResource.name)..."
+
+        $openAIDetails = az cognitiveservices account show --name $openAIResource.name --resource-group $openAIResource.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+
+        $openAIControlArray = @()
+
+        foreach ($control in $OpenAIControls) {
+            $openAICheck = $control.Split(';')
+            $openAICheckName = $openAICheck[0]
+            $openAICheckPillars = $openAICheck[1].Split(',')
+            $openAICheckWeight = $openAICheck[2]
+    
+            $openAIControlArray += [PSCustomObject]@{
+                Name = $openAICheckName
+                Pillars = $openAICheckPillars
+                Weight = $openAICheckWeight
+                Result = $null
+            }
+        }
+
+        # Calculate total weight to calculate weighted average
+        $openAITotalWeight = Get-TotalWeights($openAIControlArray)
+
+        $OpenAIResults += ""
+        $OpenAIResults += "----- Azure OpenAI Resource - $($openAIResource.name) -----"
+        $OpenAIResults += ""
+
+        # Disable public access to Azure OpenAI unless your workload requires it
+        if ($openAIResource.properties.publicNetworkAccess -match "Disabled") {
+            $OpenAIResults += "Good: Public access to Azure OpenAI is disabled for OpenAI resource $($openAIResource.name)"
+            $openAIControlArray[0].Result = 100
+        }
+        else {
+            $OpenAIResults += "Bad: Public access to Azure OpenAI is NOT disabled for OpenAI resource $($openAIResource.name)"
+            $openAIControlArray[0].Result = 0
+        }
+
+        # Use customer-managed keys for fine-tuned models and training data that's uploaded to Azure OpenAI
+        if ($openAIDetails.properties.encryption.keyVaultProperties.keyName) {
+            $OpenAIResults += "Good: Customer-managed keys are used for fine-tuned models and training data that's uploaded to Azure OpenAI for OpenAI resource $($openAIResource.name)"
+            $openAIControlArray[1].Result = 100
+        }
+        else {
+            $OpenAIResults += "Bad: Customer-managed keys are NOT used for fine-tuned models and training data that's uploaded to Azure OpenAI for OpenAI resource $($openAIResource.name)"
+            $openAIControlArray[1].Result = 0
+        }
+
+        # Enable and configure Diagnostics for the Azure OpenAI Service
+        $openAIDiagnostics = az monitor diagnostic-settings list --resource $openAIResource.id 2> $null | ConvertFrom-Json -Depth 10
+        if ($openAIDiagnostics.type -match "Microsoft.Insights/diagnosticSettings") {
+            $OpenAIResults += "Good: Diagnostics are enabled and configured for the Azure OpenAI Service for OpenAI resource $($openAIResource.name)"
+            $openAIControlArray[2].Result = 100
+        }
+        else {
+            $OpenAIResults += "Bad: Diagnostics are NOT enabled and configured for the Azure OpenAI Service for OpenAI resource $($openAIResource.name)"
+            $openAIControlArray[2].Result = 0
+        }
+
+        # Ensure that Azure OpenAI service instances don't have administrative privileges
+        $openAIControlArray[3].Result = 100
+        $openAIIdentity = az cognitiveservices account identity show --name $openAIResource.name --resource-group $openAIResource.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+        foreach ($identity in $openAIIdentity) {
+            if ($openAIIdentity.type -match "SystemAssigned") {
+                Continue
+            }
+            else {
+                $roles = az role assignment list --assignee $identity.principalId --all 2> $null | ConvertFrom-Json -Depth 10
+                if ($roles.roleDefinitionName -eq "Owner" -or $roles.roleDefinitionName -eq "Contributor" -or $roles.roleDefinitionName -eq "User Access Administrator" -or $roles.roleDefinitionName -eq "Role Based Access Control Administrator") {
+                    $openAIControlArray[3].Result = 0
+                }
+                else {
+                    Continue
+                }
+            }
+        }
+
+        if ($openAIControlArray[3].Result -eq 100) {
+            $OpenAIResults += "Good: Azure OpenAI service instances don't have administrative privileges for OpenAI resource $($openAIResource.name)"
+        }
+        else {
+            $OpenAIResults += "Bad: Azure OpenAI service instances have administrative privileges for OpenAI resource $($openAIResource.name)"
+        }
+        # Calculate the weighted average for the Azure OpenAI resource
+        $openAIScore = $openAIControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
+        $openAIAvgScore = $openAIScore / $openAITotalWeight
+        $roundedOpenAIAvg = [math]::Round($openAIAvgScore, 1)
+
+        $OpenAIResults += ""
+        $OpenAIResults += "Azure OpenAI resource $($openAIResource.name) has an average score of $roundedOpenAIAvg %."
+
+        $OpenAITotalScore += $openAIScore
+    }
+
+    if ($OpenAIResources.Count -gt 0) {
+        $OpenAITotalAvg = $OpenAITotalScore / ($openAITotalWeight * $OpenAIResources.Count)
+        $roundedOpenAITotalAvg = [math]::Round($OpenAITotalAvg, 1)
+
+        $lateReport += "Total average score for all Azure OpenAI resources in subscription $($sub.name) is $roundedOpenAITotalAvg %."
+    }
+    else {
+        $OpenAIResults += ""
+        $OpenAIResults += "No Azure OpenAI resources found for subscription $($sub.name)."
+        $OpenAIResults += ""
+    }
+
+    $WAFResults += $OpenAIResults
+
+    # End region
+
     ############### Region Score by Pillars ##################
 
     $allWeightedAverages = @()
@@ -2512,6 +2653,13 @@ foreach ($sub in $AllSubscriptions) {
         $allAKSWeightedAverages = Get-AllWeightedAveragesPerService($aksControlArray)
         foreach ($aksWeightedAverage in $allAKSWeightedAverages) {
             $allWeightedAverages += $aksWeightedAverage
+        }
+    }
+
+    if ($OpenAIControlArray) {
+        $allOpenAIWeightedAverages = Get-AllWeightedAveragesPerService($openAIControlArray)
+        foreach ($openAIWeightedAverage in $allOpenAIWeightedAverages) {
+            $allWeightedAverages += $openAIWeightedAverage
         }
     }
 
@@ -2589,7 +2737,7 @@ foreach ($sub in $AllSubscriptions) {
 
     ################# Region Outputs #####################
 
-    # This script currently writes results to the terminal, and optionally creates a txt log file.
+    # This script currently writes results to the terminal, and optionally creates a txt log file in the results folder
     
     if ($OutputToFile) {
         $WAFResults | Out-File -FilePath ( New-Item -Path ".\results\$($sub.name).txt" -Force )
@@ -2597,7 +2745,7 @@ foreach ($sub in $AllSubscriptions) {
 
     Write-Output $WAFResults
 
-    Write-Output "Results may be truncated as they do not fit in the terminal. For full results, please check the output file."
+    Write-Output "Results may be truncated if they do not fit in the terminal. For full results, please check the output file."
 
     # End region
 }
