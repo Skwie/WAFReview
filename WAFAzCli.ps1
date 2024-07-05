@@ -24,7 +24,7 @@
   Version:        0.8.1
   Author:         Jordy Groenewoud
   Creation Date:  27/03/2024
-  Last Updated:   18/06/2024
+  Last Updated:   05/07/2024
   
 .EXAMPLE
   .\WAFAzCli.ps1 -Filter "-p-lz" -OutputToFile $False
