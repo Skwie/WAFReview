@@ -21,10 +21,10 @@
   Possible ToDo is to make the file output compatible with the Microsoft powerpoint generation script.
 
 .NOTES
-  Version:        0.8.1
+  Version:        0.8.2
   Author:         Jordy Groenewoud
   Creation Date:  27/03/2024
-  Last Updated:   05/07/2024
+  Last Updated:   15/07/2024
   
 .EXAMPLE
   .\WAFAzCli.ps1 -Filter "-p-lz" -OutputToFile $False
@@ -336,7 +336,6 @@ foreach ($sub in $AllSubscriptions) {
         else {
             $StorageResults += "Bad: Storage account keys have NOT been regenerated in the past 90 days for storage account $($strg.name)."
             $strgControlArray[9].Result = 0
-            # NOTE: Every storage account currently returns this. It is still unclear whether the query does not return the correct results, or storage keys are not regenerated on any ABN storage account.
         }
 
         # Enable Azure Defender for all your storage accounts.
@@ -1707,13 +1706,25 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Check for PostgreSQL Major Version
-        if ($serverDetails.sku.tier -match 'GeneralPurpose' -and $serverDetails.sku.name -match 'GP_Gen5') {
-            $PostgreSQLResults += "Good: PostgreSQL server is using the latest major version for PostgreSQL server $($server.name)"
-            $postgreSQLControlArray[8].Result = 100
+        if ($serverStatus -match 'single') {
+            if ($serverDetails.Version -match '11') {
+                $PostgreSQLResults += "Good: PostgreSQL server is using the latest major version for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[8].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: PostgreSQL server is NOT using the latest major version for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[8].Result = 0
+            }
         }
-        else {
-            $PostgreSQLResults += "Bad: PostgreSQL server is NOT using the latest major version for PostgreSQL server $($server.name)"
-            $postgreSQLControlArray[8].Result = 0
+        if ($serverStatus -match 'flexible') {
+            if ($serverDetails.Version -match '16') {
+                $PostgreSQLResults += "Good: PostgreSQL server is using the latest major version for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[8].Result = 100
+            }
+            else {
+                $PostgreSQLResults += "Bad: PostgreSQL server is NOT using the latest major version for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[8].Result = 0
+            }
         }
 
         # Disable 'Allow access to Azure services' for PostgreSQL database servers
@@ -1872,27 +1883,13 @@ foreach ($sub in $AllSubscriptions) {
         }
 
         # Enable Storage Auto-Growth
-        if ($serverStatus -match 'single') {
-            $autoGrowth = az postgres server configuration show --server-name $server.name --resource-group $server.resourceGroup --name storage_autogrow
-            if ($autoGrowth.value -match 'on') {
-                $PostgreSQLResults += "Good: Storage Auto-Growth is enabled for PostgreSQL server $($server.name)"
-                $postgreSQLControlArray[16].Result = 100
-            }
-            else {
-                $PostgreSQLResults += "Bad: Storage Auto-Growth is NOT enabled for PostgreSQL server $($server.name)"
-                $postgreSQLControlArray[16].Result = 0
-            }
+        if ($serverDetails.storageProfile.storageAutogrow -match 'Enabled') {
+            $PostgreSQLResults += "Good: Storage Auto-Growth is enabled for PostgreSQL server $($server.name)"
+            $postgreSQLControlArray[16].Result = 100
         }
-        if ($serverStatus -match 'flexible') {
-            $autoGrowth = az postgres flexible-server configuration show --name $server.name --resource-group $server.resourceGroup --config-name storage_autogrow
-            if ($autoGrowth.value -match 'on') {
-                $PostgreSQLResults += "Good: Storage Auto-Growth is enabled for PostgreSQL server $($server.name)"
-                $postgreSQLControlArray[16].Result = 100
-            }
-            else {
-                $PostgreSQLResults += "Bad: Storage Auto-Growth is NOT enabled for PostgreSQL server $($server.name)"
-                $postgreSQLControlArray[16].Result = 0
-            }
+        else {
+            $PostgreSQLResults += "Bad: Storage Auto-Growth is NOT enabled for PostgreSQL server $($server.name)"
+            $postgreSQLControlArray[16].Result = 0
         }
 
         # Calculate the weighted average for the PostgreSQL server
