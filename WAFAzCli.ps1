@@ -1523,6 +1523,8 @@ foreach ($sub in $AllSubscriptions) {
         $serverDetails = az postgres server show --name $server.name --resource-group $server.resourceGroup | ConvertFrom-Json -Depth 10
         if ($?) {
             $serverStatus = "single"
+            $PostgreSQLResults += ""
+            $PostgreSQLResults += "$server.name is a PostgreSQL single server. Single server is due to be deprecated in March 2025. Consider migrating to a flexible server."
         }
         else {
             $serverDetails = az postgres flexible-server show --name $server.name --resource-group $server.resourceGroup | ConvertFrom-Json -Depth 10
