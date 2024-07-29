@@ -439,8 +439,6 @@ foreach ($sub in $AllSubscriptions) {
 
         $tempStorageResults += ""
         $tempStorageResults += "Storage Account $($strg.name) has an average score of $roundedStorageAvg %."
-
-        $storageTotalScore += $storageScore
     
         }
     }
@@ -450,7 +448,9 @@ foreach ($sub in $AllSubscriptions) {
         $storageJobs | Wait-Job
 
         foreach ($job in $storageJobs) {
-            $job | Receive-Job
+            $jobresults = $job | Receive-Job -AutoRemoveJob
+            $StorageResults += $jobresults.tempStorageResults
+            $storageTotalScore += $jobresults.storageScore
         }
 
         $storageTotalAvg = $storageTotalScore / ($strgTotalWeight * $StorageAccounts.Count)
