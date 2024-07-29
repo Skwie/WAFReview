@@ -448,7 +448,7 @@ foreach ($sub in $AllSubscriptions) {
         $storageJobs | Wait-Job
 
         foreach ($job in $storageJobs) {
-            $jobresults = $job | Receive-Job -AutoRemoveJob
+            $jobresults = $job | Receive-Job
             $StorageResults += $jobresults.tempStorageResults
             $storageTotalScore += $jobresults.storageScore
             $strgTotalWeight = $jobresults.strgTotalWeight
