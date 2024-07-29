@@ -191,6 +191,8 @@ foreach ($sub in $AllSubscriptions) {
         $DefenderActive = $true
     }
 
+    $storageJobs = @()
+
     foreach ($strg in $StorageAccounts) {
 
         Write-Output "Checking Storage Account $($strg.name)..."
