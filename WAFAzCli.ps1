@@ -448,11 +448,10 @@ foreach ($sub in $AllSubscriptions) {
         $storageJobs | Wait-Job | Out-Null
 
         foreach ($job in $storageJobs) {
-            $jobresults = $job | Receive-Job
-            Write-Output $jobresults
-            $StorageResults += $jobresults.tempStorageResults
-            $storageTotalScore += $jobresults.storageScore
-            $strgTotalWeight = $jobresults.strgTotalWeight
+            Write-Output $job
+            $StorageResults += $job.tempStorageResults
+            $storageTotalScore += $job.storageScore
+            $strgTotalWeight = $job.strgTotalWeight
         }
 
         $storageTotalAvg = $storageTotalScore / ($strgTotalWeight * $StorageAccounts.Count)
