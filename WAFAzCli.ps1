@@ -191,6 +191,8 @@ foreach ($sub in $AllSubscriptions) {
         $DefenderActive = $true
     }
 
+    $strgJob = Start-ThreadJob -Name "StorageJob" -ScriptBlock {
+
     foreach ($strg in $StorageAccounts) {
 
         Write-Output "Checking Storage Account $($strg.name)..."
@@ -432,6 +434,8 @@ foreach ($sub in $AllSubscriptions) {
         $StorageResults += "Storage Account $($strg.name) has an average score of $roundedStorageAvg %."
 
         $storageTotalScore += $storageScore
+
+        }
     }
 
     if ($storageAccounts) {
