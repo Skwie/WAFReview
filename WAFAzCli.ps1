@@ -440,6 +440,7 @@ foreach ($sub in $AllSubscriptions) {
         $tempStorageResults += ""
         $tempStorageResults += "Storage Account $($strg.name) has an average score of $roundedStorageAvg %."
     
+        $tempStorageResults,$strgControlArray,$storageScore,$strgTotalWeight
         }
     }
 
@@ -447,10 +448,9 @@ foreach ($sub in $AllSubscriptions) {
         Write-Output "Waiting for storage account checks to complete..."
         
         foreach ($job in ($storageJobs | Wait-Job)) {
-            Write-Output $job
-            $StorageResults += $job.tempStorageResults
-            $storageTotalScore += $job.storageScore
-            $strgTotalWeight = $job.strgTotalWeight
+            $tempStorageResults,$strgControlArray,$storageScore,$strgTotalWeight = Receive-Job -Job $job
+            $StorageResults += $tempStorageResults
+            $storageTotalScore += $storageScore
         }
 
         $storageTotalAvg = $storageTotalScore / ($strgTotalWeight * $StorageAccounts.Count)
