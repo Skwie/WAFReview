@@ -451,6 +451,7 @@ foreach ($sub in $AllSubscriptions) {
             $jobresults = $job | Receive-Job -AutoRemoveJob
             $StorageResults += $jobresults.tempStorageResults
             $storageTotalScore += $jobresults.storageScore
+            $strgTotalWeight = $jobresults.strgTotalWeight
         }
 
         $storageTotalAvg = $storageTotalScore / ($strgTotalWeight * $StorageAccounts.Count)
