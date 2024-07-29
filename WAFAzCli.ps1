@@ -198,6 +198,8 @@ foreach ($sub in $AllSubscriptions) {
         Write-Output "Checking Storage Account $($strg.name)..."
 
         $storageJobs += Start-Threadjob -ScriptBlock {
+        $using:strg
+        $using:StorageControls
 
         $strgControlArray = @()
 
@@ -215,8 +217,10 @@ foreach ($sub in $AllSubscriptions) {
             }
         }
 
-        # Calculate total weight to calculate weighted average
-        $strgTotalWeight = Get-TotalWeights($strgControlArray)
+        $strgTotalWeight = 0
+        foreach ($control in $strgControlArray) {
+            $strgTotalWeight += $control.Weight
+        }
 
         $StorageResults += ""
         $StorageResults += "----- Storage Account - $($strg.name) -----"
@@ -446,7 +450,7 @@ foreach ($sub in $AllSubscriptions) {
         foreach ($job in $storageJobs) {
             $job | Receive-Job
         }
-        
+
         $storageTotalAvg = $storageTotalScore / ($strgTotalWeight * $StorageAccounts.Count)
         $roundedStorageTotalAvg = [math]::Round($storageTotalAvg, 1)
 
