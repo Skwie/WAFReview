@@ -440,6 +440,13 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     if ($storageAccounts) {
+        Write-Output "Waiting for storage account checks to complete..."
+        $storageJobs | Wait-Job
+
+        foreach ($job in $storageJobs) {
+            $job | Receive-Job
+        }
+        
         $storageTotalAvg = $storageTotalScore / ($strgTotalWeight * $StorageAccounts.Count)
         $roundedStorageTotalAvg = [math]::Round($storageTotalAvg, 1)
 
