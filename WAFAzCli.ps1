@@ -445,9 +445,8 @@ foreach ($sub in $AllSubscriptions) {
 
     if ($storageAccounts) {
         Write-Output "Waiting for storage account checks to complete..."
-        $storageJobs | Wait-Job | Out-Null
-
-        foreach ($job in $storageJobs) {
+        
+        foreach ($job in ($storageJobs | Wait-Job)) {
             Write-Output $job
             $StorageResults += $job.tempStorageResults
             $storageTotalScore += $job.storageScore
