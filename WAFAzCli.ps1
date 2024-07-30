@@ -751,7 +751,10 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Calculate total weight to calculate weighted average
-            $vmTotalWeight = Get-TotalWeights($vmControlArray)
+            $vmTotalWeight = 0
+            foreach ($control in $vmControlArray) {
+                $vmTotalWeight += $control.Weight
+            }
 
             $tempVMResults += ""
             $tempVMResults += "----- Virtual Machine - $($vm.name) -----"
