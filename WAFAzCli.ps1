@@ -115,8 +115,13 @@ if (!$azsession) {
 if ($PSVersionTable.PSVersion.Major -lt 7) {
     $threadJobInstalled = Get-InstalledModule -Name Threadjob -ErrorAction SilentlyContinue
     if (!$threadJobInstalled) {
-        Write-Output "ThreadJob module not found. Please install the ThreadJob module to run this script."
-        throw
+        Write-Output "ThreadJob module not found. Trying to install it.."
+        Install-Module -Name ThreadJob -Force -AllowClobber -Scope CurrentUser
+        $threadJobInstalled = Get-InstalledModule -Name Threadjob -ErrorAction SilentlyContinue
+        if (!$threadJobInstalled) {
+            Write-Output "Unable to install ThreadJob module. Please install it manually."
+            throw
+        }
     }
 }
 
