@@ -225,6 +225,7 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
 
+            # Calculate total weight to calculate weighted average
             $strgTotalWeight = 0
             foreach ($control in $strgControlArray) {
                 $strgTotalWeight += $control.Weight
@@ -536,7 +537,10 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Calculate total weight to calculate weighted average
-            $kvTotalWeight = Get-TotalWeights($kvControlArray)
+            $kvTotalWeight = 0
+            foreach ($control in $kvControlArray) {
+                $kvTotalWeight += $control.Weight
+            }
 
             $tempVaultResults = @()
             $tempVaultResults += ""
@@ -660,7 +664,7 @@ foreach ($sub in $AllSubscriptions) {
             $VaultResults += $tempVaultResults
             $kvTotalScore += $kvScore
         }
-        
+
         $kvTotalAvg = $kvTotalScore / ($kvTotalWeight * $Keyvaults.Count)
         $roundedKvTotalAvg = [math]::Round($kvTotalAvg, 1)
 
