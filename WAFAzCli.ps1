@@ -1641,7 +1641,7 @@ foreach ($sub in $AllSubscriptions) {
 
             $postgreSQLControlArray = @()
 
-            foreach ($control in $PostgreSQLControls) {
+            foreach ($control in $using:PostgreSQLControls) {
                 $postgreSQLCheck = $control.Split(';')
                 $postgreSQLCheckName = $postgreSQLCheck[0]
                 $postgreSQLCheckPillars = $postgreSQLCheck[1].Split(',')
@@ -2751,7 +2751,7 @@ foreach ($sub in $AllSubscriptions) {
             $OpenAIResults += $tempOpenAIResults
             $OpenAITotalScore += $openAIScore
         }
-        
+
         $OpenAITotalAvg = $OpenAITotalScore / ($openAITotalWeight * $OpenAIResources.Count)
         $roundedOpenAITotalAvg = [math]::Round($OpenAITotalAvg, 1)
 
