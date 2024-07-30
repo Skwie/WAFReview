@@ -724,318 +724,334 @@ foreach ($sub in $AllSubscriptions) {
     # Query JIT policies once, as they are not VM-specific
     $jitPolicies = az security jit-policy list --query '[*].virtualMachines | []' | ConvertFrom-Json -Depth 10
 
+    $vmJobs = @()
+
     foreach ($vm in $VirtualMachines) {
 
         Write-Output "Checking Virtual Machine $($vm.name)..."
 
-        $vmControlArray = @()
+        $vmJobs += Start-Threadjob -ScriptBlock {
 
-        foreach ($control in $VMControls) {
-            $vmCheck = $control.Split(';')
-            $vmCheckName = $vmCheck[0]
-            $vmCheckPillars = $vmCheck[1].Split(',')
-            $vmCheckWeight = $vmCheck[2]
-    
-            $vmControlArray += [PSCustomObject]@{
-                Name = $vmCheckName
-                Pillars = $vmCheckPillars
-                Weight = $vmCheckWeight
-                Result = $null
+            $vm = $using:vm
+
+            $vmControlArray = @()
+
+            foreach ($control in $using:VMControls) {
+                $vmCheck = $control.Split(';')
+                $vmCheckName = $vmCheck[0]
+                $vmCheckPillars = $vmCheck[1].Split(',')
+                $vmCheckWeight = $vmCheck[2]
+        
+                $vmControlArray += [PSCustomObject]@{
+                    Name = $vmCheckName
+                    Pillars = $vmCheckPillars
+                    Weight = $vmCheckWeight
+                    Result = $null
+                }
             }
-        }
 
-        # Calculate total weight to calculate weighted average
-        $vmTotalWeight = Get-TotalWeights($vmControlArray)
+            # Calculate total weight to calculate weighted average
+            $vmTotalWeight = Get-TotalWeights($vmControlArray)
 
-        $VMResults += ""
-        $VMResults += "----- Virtual Machine - $($vm.name) -----"
-        $VMResults += ""
+            $tempVMResults += ""
+            $tempVMResults += "----- Virtual Machine - $($vm.name) -----"
+            $tempVMResults += ""
 
-        # Check for presence of AppName tag
-        if ($vm.tags.AppName) {
-            $VMResults += "Good: AppName tag is present on VM $($vm.name)"
-            $vmControlArray[0].Result = 100
-        }
-        else {
-            $VMResults += "Bad: AppName tag is NOT present on VM $($vm.name)"
-            $vmControlArray[0].Result = 0
-        }
-
-        # Check for presence of CI tag
-        if ($vm.tags.'Business Application CI') {
-            $VMResults += "Good: Application CI tag is present on VM $($vm.name)"
-            $vmControlArray[1].Result = 100
-        }
-        else {
-            $VMResults += "Bad: Application CI tag is NOT present on VM $($vm.name)"
-            $vmControlArray[1].Result = 0
-        }
-
-        # Check for presence of CIA tag
-        if ($vm.tags.CIA) {
-            $VMResults += "Good: CIA tag is present on VM $($vm.name)"
-            $vmControlArray[2].Result = 100
-        }
-        else {
-            $VMResults += "Bad: CIA tag is NOT present on VM $($vm.name)"
-            $vmControlArray[2].Result = 0
-        }
-
-        # Restrict public IP addresses for Azure Virtual Machines
-        $VmIpAddresses = az vm list-ip-addresses --name $vm.name --resource-group $vm.resourceGroup | ConvertFrom-Json -Depth 10
-        if ($VmIpAddresses.virtualMachine.network.publicIpAddresses) {
-            $VMResults += "Bad: Public IP addresses are present on VM $($vm.name)"
-            $vmControlArray[3].Result = 0
-        }
-        else {
-            $VMResults += "Good: No Public IP addresses are present on VM $($vm.name)"
-            $vmControlArray[3].Result = 100
-        }
-
-        # Restrict IP forwarding for Azure Virtual Machines
-        $VmNICs = az network nic list --query "[?virtualMachine.id == '$($vm.id)']" | ConvertFrom-Json -Depth 10
-        $enableForwarding = $false
-        foreach ($nic in $VmNICs) {
-            if ($nic.enableIpForwarding) {
-                $VMResults += "Bad: IP Forwarding is enabled on NIC $($nic.name) for VM $($vm.name)"
-                $enableForwarding = $true
+            # Check for presence of AppName tag
+            if ($vm.tags.AppName) {
+                $tempVMResults += "Good: AppName tag is present on VM $($vm.name)"
+                $vmControlArray[0].Result = 100
             }
             else {
-                $VMResults += "Good: IP Forwarding is disabled on NIC $($nic.name) for VM $($vm.name)"
+                $tempVMResults += "Bad: AppName tag is NOT present on VM $($vm.name)"
+                $vmControlArray[0].Result = 0
             }
-        }
-        if ($enableForwarding) {
-            $vmControlArray[4].Result = 0
-        }
-        else {
-            $vmControlArray[4].Result = 100
-        }
 
-        # Check if VM network interfaces have a Network Security Group attached
-        # Set to true by default, and only set to false if a NIC is found without a NSG attached.
-        $enableNSG = $true
-        foreach ($nic in $VmNICs) {
-            if ($nic.networkSecurityGroup) {
-                $VMResults += "Good: Network Security Group is attached to NIC $($nic.name) for VM $($vm.name)"
+            # Check for presence of CI tag
+            if ($vm.tags.'Business Application CI') {
+                $tempVMResults += "Good: Application CI tag is present on VM $($vm.name)"
+                $vmControlArray[1].Result = 100
             }
             else {
-                $VMResults += "Bad: No Network Security Group is attached to NIC $($nic.name) for VM $($vm.name)"
-                $enableNSG = $false
+                $tempVMResults += "Bad: Application CI tag is NOT present on VM $($vm.name)"
+                $vmControlArray[1].Result = 0
             }
-        }
-        if ($enableNSG) {
-            $vmControlArray[5].Result = 100
-        }
-        else {
-            $vmControlArray[5].Result = 0
-        }
 
-        # Enable Azure Disk Encryption for Azure Virtual Machines
-        $DiskEncryption = az vm encryption show --name $vm.name --resource-group $vm.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
-        if ($DiskEncryption) {
-            $VMResults += "Good: Disk Encryption is enabled for VM $($vm.name)"
-            $vmControlArray[6].Result = 100
-        }
-        else {
-            $VMResults += "Bad: Disk Encryption is NOT enabled for VM $($vm.name)"
-            $vmControlArray[6].Result = 0
-        }
-
-        # Enable Endpoint Protection for Azure Virtual Machines
-        $enableMDE = $false
-        foreach ($resource in $vm.resources) {
-            if ($resource.id -match 'MDE.Windows') {
-                $enableMDE = $true
+            # Check for presence of CIA tag
+            if ($vm.tags.CIA) {
+                $tempVMResults += "Good: CIA tag is present on VM $($vm.name)"
+                $vmControlArray[2].Result = 100
             }
-        }
-        if ($enableMDE) {
-            $VMResults += "Good: Endpoint Protection is enabled for VM $($vm.name)"
-            $vmControlArray[7].Result = 100
-        }
-        else {
-            $VMResults += "Bad: Endpoint Protection is NOT enabled for VM $($vm.name)"
-            $vmControlArray[7].Result = 0
-        }
+            else {
+                $tempVMResults += "Bad: CIA tag is NOT present on VM $($vm.name)"
+                $vmControlArray[2].Result = 0
+            }
 
-        # Enable Hybrid Benefit for Azure Virtual Machines
-        $detailedVmInfo = az vm get-instance-view --name $vm.name --resource-group $vm.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
-        if ($detailedVmInfo.licenseType -match 'Windows_Server') {
-            $VMResults += "Good: Hybrid Benefit is enabled for VM $($vm.name)"
-            $vmControlArray[8].Result = 100
-        }
-        else {
-            $VMResults += "Informational: Hybrid Benefit is not enabled for VM $($vm.name)"
-            $vmControlArray[8].Result = 50
-        }
+            # Restrict public IP addresses for Azure Virtual Machines
+            $VmIpAddresses = az vm list-ip-addresses --name $vm.name --resource-group $vm.resourceGroup | ConvertFrom-Json -Depth 10
+            if ($VmIpAddresses.virtualMachine.network.publicIpAddresses) {
+                $tempVMResults += "Bad: Public IP addresses are present on VM $($vm.name)"
+                $vmControlArray[3].Result = 0
+            }
+            else {
+                $tempVMResults += "Good: No Public IP addresses are present on VM $($vm.name)"
+                $vmControlArray[3].Result = 100
+            }
 
-        # Enable automatic upgrades for extensions on Azure Virtual Machines
-        $extensionCount = 0
-        $autoUpgradeEnabledCount = 0
-        foreach ($resource in $vm.resources) {
-            if ($resource.id -match 'HybridWorkerExtension' -or $resource.id -match 'DependencyAgentLinux'-or $resource.id -match 'DependencyAgentWindows' -or $resource.id -match 'ApplicationHealthLinux' -or $resource.id -match 'ApplicationHealthWindows' -or $resource.id -match 'GuestAttestation' -or $resource.id -match 'ConfigurationForLinux' -or $resource.id -match 'ConfigurationForWindows' -or $resource.id -match 'KeyVaultForLinux' -or $resource.id -match 'KeyVaultForWindows' -or $resource.id -match 'AzureMonitorLinuxAgent' -or $resource.id -match 'AzureMonitorWindowsAgent' -or $resource.id -match 'OmsAgentForLinux' -or $resource.id -match 'LinuxDiagnostic' -or $resource.id -match 'ServiceFabricLinuxNode') {
-                $extensionCount += 1
-                if ($resource.autoUpgradeMinorVersion -match 'True') {
-                    $VMResults += "Good: Automatic upgrades are enabled for extension $($resource.id.split("/")[-1]) on VM $($vm.name)"
-                    $autoUpgradeEnabledCount += 1
+            # Restrict IP forwarding for Azure Virtual Machines
+            $VmNICs = az network nic list --query "[?virtualMachine.id == '$($vm.id)']" | ConvertFrom-Json -Depth 10
+            $enableForwarding = $false
+            foreach ($nic in $VmNICs) {
+                if ($nic.enableIpForwarding) {
+                    $tempVMResults += "Bad: IP Forwarding is enabled on NIC $($nic.name) for VM $($vm.name)"
+                    $enableForwarding = $true
                 }
                 else {
-                    $VMResults += "Bad: Automatic upgrades are NOT enabled for extension $($resource.id.split("/")[-1]) on VM $($vm.name)"
-                }   
+                    $tempVMResults += "Good: IP Forwarding is disabled on NIC $($nic.name) for VM $($vm.name)"
+                }
             }
-        }
-        if ($extensionCount -gt 0) {
-            $percValue = ($extensioncount / 100) * $autoUpgradeEnabledCount
-            $vmControlArray[9].Result = $percValue
-        }
-        else {
-            $VMResults += "Informational: No automatically upgradeable extensions found on VM $($vm.name)"
-            $vmControlArray[9].Result = 100
-            $vmControlArray[9].Weight = 0
-        }
-
-        # Enable Azure Monitor for Azure Virtual Machines
-        $azMonEnabled = $false
-        foreach ($resource in $vm.resources) {
-            if ($resource.id -match 'AzureMonitorLinuxAgent' -or $resource.id -match 'AzureMonitorWindowsAgent') {
-                $azMonEnabled = $true
-            }
-        }
-        if ($azMonEnabled) {
-            $VMResults += "Good: Azure Monitor is enabled for VM $($vm.name)"
-            $vmControlArray[10].Result = 100
-        }
-        else {
-            $VMResults += "Bad: Azure Monitor is NOT enabled for VM $($vm.name)"
-            $vmControlArray[10].Result = 0
-        }
-
-        # Enable VM Insights for Azure Virtual Machines
-        $VMInsightsEnabled = $false
-        foreach ($resource in $vm.resources) {
-            if ($resource.id -match 'DependencyAgentLinux' -and $resource.id -match 'AzureMonitorLinuxAgent') {
-                $VMInsightsEnabled = $true
-            }
-            elseif ($resource.id -match 'DependencyAgentWindows' -and $resource.id -match 'AzureMonitorWindowsAgent') {
-                $VMInsightsEnabled = $true
-            }
-        }
-        if ($VMInsightsEnabled) {
-            $VMResults += "Good: VM Insights is enabled for VM $($vm.name)"
-            $vmControlArray[11].Result = 100
-        }
-        else {
-            $VMResults += "Bad: VM Insights is NOT enabled for VM $($vm.name)"
-            $vmControlArray[11].Result = 0
-        }
-
-        # Enable boot diagnostics for Azure Virtual Machines
-        if ($vm.diagnosticsProfile.bootDiagnostics.enabled -match 'True') {
-            $VMResults += "Good: Boot Diagnostics are enabled for VM $($vm.name)"
-            $vmControlArray[12].Result = 100
-        }
-        else {
-            $VMResults += "Bad: Boot Diagnostics are NOT enabled for VM $($vm.name)"
-            $vmControlArray[12].Result = 0
-        }
-
-        # Enable accelerated networking for Azure Virtual Machines
-        $accelerationEnabled = $false
-        foreach ($nic in $VmNICs) {
-            if ($nic.enableAcceleratedNetworking) {
-                $VMResults += "Good: Accelerated Networking is enabled on NIC $($nic.name) for VM $($vm.name)"
-                $accelerationEnabled = $true
+            if ($enableForwarding) {
+                $vmControlArray[4].Result = 0
             }
             else {
-                $VMResults += "Bad: Accelerated Networking is NOT enabled on NIC $($nic.name) for VM $($vm.name)"
+                $vmControlArray[4].Result = 100
             }
-        }
-        if ($accelerationEnabled) {
-            $vmControlArray[13].Result = 100
-        }
-        else {
-            $vmControlArray[13].Result = 0
-        }
 
-        # Use Managed Disks for Azure Virtual Machines
-        $managedDisks = $true
-        foreach ($disk in $vm.storageProfile.osDisk.managedDisk) {
-            if ($disk -match 'null') {
-                $managedDisks = $false
+            # Check if VM network interfaces have a Network Security Group attached
+            # Set to true by default, and only set to false if a NIC is found without a NSG attached.
+            $enableNSG = $true
+            foreach ($nic in $VmNICs) {
+                if ($nic.networkSecurityGroup) {
+                    $tempVMResults += "Good: Network Security Group is attached to NIC $($nic.name) for VM $($vm.name)"
+                }
+                else {
+                    $tempVMResults += "Bad: No Network Security Group is attached to NIC $($nic.name) for VM $($vm.name)"
+                    $enableNSG = $false
+                }
             }
-        }
-        if ($managedDisks) {
-            $VMResults += "Good: Managed Disks are used for VM $($vm.name)"
-            $vmControlArray[14].Result = 100
-        }
-        else {
-            $VMResults += "Bad: Managed Disks are NOT used for VM $($vm.name)"
-            $vmControlArray[14].Result = 0
-        }
-
-        # Disable Premium SSD for Azure Virtual Machines
-        $premiumSSD = $false
-        foreach ($disk in $vm.storageProfile.osDisk) {
-            if ($disk.managedDisk.storageAccountType -match 'Premium') {
-                $VMResults += "Bad: Premium SSD is used for OS Disk on VM $($vm.name)"
-                $premiumSSD = $true
+            if ($enableNSG) {
+                $vmControlArray[5].Result = 100
             }
             else {
-                $VMResults += "Good: Standard SSD is used for OS Disk on VM $($vm.name)"
+                $vmControlArray[5].Result = 0
             }
-        }
-        if ($premiumSSD) {
-            $vmControlArray[15].Result = 0
-        }
-        else {
-            $vmControlArray[15].Result = 100
-        }
 
-        # Enable JIT Access for Azure Virtual Machines
-        if ($jitPolicies) {
-            if ($vm.id -in $jitPolicies) {
-                $VMResults += "Good: JIT Access is enabled for VM $($vm.name)"
-                $vmControlArray[16].Result = 100
+            # Enable Azure Disk Encryption for Azure Virtual Machines
+            $DiskEncryption = az vm encryption show --name $vm.name --resource-group $vm.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+            if ($DiskEncryption) {
+                $tempVMResults += "Good: Disk Encryption is enabled for VM $($vm.name)"
+                $vmControlArray[6].Result = 100
             }
             else {
-                $VMResults += "Bad: JIT Access is NOT enabled for VM $($vm.name)"
+                $tempVMResults += "Bad: Disk Encryption is NOT enabled for VM $($vm.name)"
+                $vmControlArray[6].Result = 0
+            }
+
+            # Enable Endpoint Protection for Azure Virtual Machines
+            $enableMDE = $false
+            foreach ($resource in $vm.resources) {
+                if ($resource.id -match 'MDE.Windows') {
+                    $enableMDE = $true
+                }
+            }
+            if ($enableMDE) {
+                $tempVMResults += "Good: Endpoint Protection is enabled for VM $($vm.name)"
+                $vmControlArray[7].Result = 100
+            }
+            else {
+                $tempVMResults += "Bad: Endpoint Protection is NOT enabled for VM $($vm.name)"
+                $vmControlArray[7].Result = 0
+            }
+
+            # Enable Hybrid Benefit for Azure Virtual Machines
+            $detailedVmInfo = az vm get-instance-view --name $vm.name --resource-group $vm.resourceGroup 2> $null | ConvertFrom-Json -Depth 15
+            if ($detailedVmInfo.licenseType -match 'Windows_Server') {
+                $tempVMResults += "Good: Hybrid Benefit is enabled for VM $($vm.name)"
+                $vmControlArray[8].Result = 100
+            }
+            else {
+                $tempVMResults += "Informational: Hybrid Benefit is not enabled for VM $($vm.name)"
+                $vmControlArray[8].Result = 50
+            }
+
+            # Enable automatic upgrades for extensions on Azure Virtual Machines
+            $extensionCount = 0
+            $autoUpgradeEnabledCount = 0
+            foreach ($resource in $vm.resources) {
+                if ($resource.id -match 'HybridWorkerExtension' -or $resource.id -match 'DependencyAgentLinux'-or $resource.id -match 'DependencyAgentWindows' -or $resource.id -match 'ApplicationHealthLinux' -or $resource.id -match 'ApplicationHealthWindows' -or $resource.id -match 'GuestAttestation' -or $resource.id -match 'ConfigurationForLinux' -or $resource.id -match 'ConfigurationForWindows' -or $resource.id -match 'KeyVaultForLinux' -or $resource.id -match 'KeyVaultForWindows' -or $resource.id -match 'AzureMonitorLinuxAgent' -or $resource.id -match 'AzureMonitorWindowsAgent' -or $resource.id -match 'OmsAgentForLinux' -or $resource.id -match 'LinuxDiagnostic' -or $resource.id -match 'ServiceFabricLinuxNode') {
+                    $extensionCount += 1
+                    if ($resource.autoUpgradeMinorVersion -match 'True') {
+                        $tempVMResults += "Good: Automatic upgrades are enabled for extension $($resource.id.split("/")[-1]) on VM $($vm.name)"
+                        $autoUpgradeEnabledCount += 1
+                    }
+                    else {
+                        $tempVMResults += "Bad: Automatic upgrades are NOT enabled for extension $($resource.id.split("/")[-1]) on VM $($vm.name)"
+                    }   
+                }
+            }
+            if ($extensionCount -gt 0) {
+                $percValue = ($extensioncount / 100) * $autoUpgradeEnabledCount
+                $vmControlArray[9].Result = $percValue
+            }
+            else {
+                $tempVMResults += "Informational: No automatically upgradeable extensions found on VM $($vm.name)"
+                $vmControlArray[9].Result = 100
+                $vmControlArray[9].Weight = 0
+            }
+
+            # Enable Azure Monitor for Azure Virtual Machines
+            $azMonEnabled = $false
+            foreach ($resource in $vm.resources) {
+                if ($resource.id -match 'AzureMonitorLinuxAgent' -or $resource.id -match 'AzureMonitorWindowsAgent') {
+                    $azMonEnabled = $true
+                }
+            }
+            if ($azMonEnabled) {
+                $tempVMResults += "Good: Azure Monitor is enabled for VM $($vm.name)"
+                $vmControlArray[10].Result = 100
+            }
+            else {
+                $tempVMResults += "Bad: Azure Monitor is NOT enabled for VM $($vm.name)"
+                $vmControlArray[10].Result = 0
+            }
+
+            # Enable VM Insights for Azure Virtual Machines
+            $VMInsightsEnabled = $false
+            foreach ($resource in $vm.resources) {
+                if ($resource.id -match 'DependencyAgentLinux' -and $resource.id -match 'AzureMonitorLinuxAgent') {
+                    $VMInsightsEnabled = $true
+                }
+                elseif ($resource.id -match 'DependencyAgentWindows' -and $resource.id -match 'AzureMonitorWindowsAgent') {
+                    $VMInsightsEnabled = $true
+                }
+            }
+            if ($VMInsightsEnabled) {
+                $tempVMResults += "Good: VM Insights is enabled for VM $($vm.name)"
+                $vmControlArray[11].Result = 100
+            }
+            else {
+                $tempVMResults += "Bad: VM Insights is NOT enabled for VM $($vm.name)"
+                $vmControlArray[11].Result = 0
+            }
+
+            # Enable boot diagnostics for Azure Virtual Machines
+            if ($vm.diagnosticsProfile.bootDiagnostics.enabled -match 'True') {
+                $tempVMResults += "Good: Boot Diagnostics are enabled for VM $($vm.name)"
+                $vmControlArray[12].Result = 100
+            }
+            else {
+                $tempVMResults += "Bad: Boot Diagnostics are NOT enabled for VM $($vm.name)"
+                $vmControlArray[12].Result = 0
+            }
+
+            # Enable accelerated networking for Azure Virtual Machines
+            $accelerationEnabled = $false
+            foreach ($nic in $VmNICs) {
+                if ($nic.enableAcceleratedNetworking) {
+                    $tempVMResults += "Good: Accelerated Networking is enabled on NIC $($nic.name) for VM $($vm.name)"
+                    $accelerationEnabled = $true
+                }
+                else {
+                    $tempVMResults += "Bad: Accelerated Networking is NOT enabled on NIC $($nic.name) for VM $($vm.name)"
+                }
+            }
+            if ($accelerationEnabled) {
+                $vmControlArray[13].Result = 100
+            }
+            else {
+                $vmControlArray[13].Result = 0
+            }
+
+            # Use Managed Disks for Azure Virtual Machines
+            $managedDisks = $true
+            foreach ($disk in $vm.storageProfile.osDisk.managedDisk) {
+                if ($disk -match 'null') {
+                    $managedDisks = $false
+                }
+            }
+            if ($managedDisks) {
+                $tempVMResults += "Good: Managed Disks are used for VM $($vm.name)"
+                $vmControlArray[14].Result = 100
+            }
+            else {
+                $tempVMResults += "Bad: Managed Disks are NOT used for VM $($vm.name)"
+                $vmControlArray[14].Result = 0
+            }
+
+            # Disable Premium SSD for Azure Virtual Machines
+            $premiumSSD = $false
+            foreach ($disk in $vm.storageProfile.osDisk) {
+                if ($disk.managedDisk.storageAccountType -match 'Premium') {
+                    $tempVMResults += "Bad: Premium SSD is used for OS Disk on VM $($vm.name)"
+                    $premiumSSD = $true
+                }
+                else {
+                    $tempVMResults += "Good: Standard SSD is used for OS Disk on VM $($vm.name)"
+                }
+            }
+            if ($premiumSSD) {
+                $vmControlArray[15].Result = 0
+            }
+            else {
+                $vmControlArray[15].Result = 100
+            }
+
+            # Enable JIT Access for Azure Virtual Machines
+            if ($jitPolicies) {
+                if ($vm.id -in $jitPolicies) {
+                    $tempVMResults += "Good: JIT Access is enabled for VM $($vm.name)"
+                    $vmControlArray[16].Result = 100
+                }
+                else {
+                    $tempVMResults += "Bad: JIT Access is NOT enabled for VM $($vm.name)"
+                    $vmControlArray[16].Result = 0
+                }
+            }
+            else{
+                $tempVMResults += "Bad: No JIT Policies found for VM $($vm.name)"
                 $vmControlArray[16].Result = 0
             }
-        }
-        else{
-            $VMResults += "Bad: No JIT Policies found for VM $($vm.name)"
-            $vmControlArray[16].Result = 0
-        }
 
-        # Enable VM Backup for Azure Virtual Machines
-        $vaults = az backup vault list --query '[*].name' 2> $null | ConvertFrom-Json -Depth 10
-        $vmBackedUp = $false
-        foreach ($vault in $vaults) {
-            $backupItems = az backup item list --vault-name $vault --resource-group $vm.resourceGroup --query '[*].properties.virtualMachineId' 2> $null | ConvertFrom-Json -Depth 10
-            if ($backupItems -contains $vm.id) {
-                $vmBackedUp = $true
+            # Enable VM Backup for Azure Virtual Machines
+            $vaults = az backup vault list --query '[*].name' 2> $null | ConvertFrom-Json -Depth 10
+            $vmBackedUp = $false
+            foreach ($vault in $vaults) {
+                $backupItems = az backup item list --vault-name $vault --resource-group $vm.resourceGroup --query '[*].properties.virtualMachineId' 2> $null | ConvertFrom-Json -Depth 10
+                if ($backupItems -contains $vm.id) {
+                    $vmBackedUp = $true
+                }
             }
-        }
-        if ($vmBackedUp) {
-            $VMResults += "Good: VM Backup is enabled for VM $($vm.name)"
-            $vmControlArray[17].Result = 100
-        }
-        else {
-            $VMResults += "Bad: VM Backup is NOT enabled for VM $($vm.name)"
-            $vmControlArray[17].Result = 0
-        }
+            if ($vmBackedUp) {
+                $tempVMResults += "Good: VM Backup is enabled for VM $($vm.name)"
+                $vmControlArray[17].Result = 100
+            }
+            else {
+                $tempVMResults += "Bad: VM Backup is NOT enabled for VM $($vm.name)"
+                $vmControlArray[17].Result = 0
+            }
 
-        # Calculate the weighted average for the virtual machine
-        $vmScore = $vmControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
-        $vmAvgScore = $vmScore / $vmTotalWeight
-        $roundedVmAvg = [math]::Round($vmAvgScore, 1)
+            # Calculate the weighted average for the virtual machine
+            $vmScore = $vmControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
+            $vmAvgScore = $vmScore / $vmTotalWeight
+            $roundedVmAvg = [math]::Round($vmAvgScore, 1)
 
-        $VMResults += ""
-        $VMResults += "Virtual Machine $($vm.name) has an average score of $roundedVmAvg %."
+            $tempVMResults += ""
+            $tempVMResults += "Virtual Machine $($vm.name) has an average score of $roundedVmAvg %."
 
-        $vmTotalScore += $vmScore
+            $vmTotalScore += $vmScore
+
+            $tempVMResults,$vmControlArray,$vmScore,$vmTotalWeight
+        }
     }
 
     if ($VirtualMachines) {
+        Write-Output "Waiting for virtual machine checks to complete..."
+
+        foreach ($job in ($vmJobs | Wait-Job)) {
+            $tempVMResults,$vmControlArray,$vmScore,$vmTotalWeight = Receive-Job -Job $job
+            $VMResults += $tempVMResults
+        }
+
         $vmTotalAvg = $vmTotalScore / ($vmTotalWeight * $VirtualMachines.Count)
         $roundedVmTotalAvg = [math]::Round($vmTotalAvg, 1)
 
