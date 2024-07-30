@@ -112,6 +112,14 @@ if (!$azsession) {
     }
 }
 
+if ($PSVersionTable.PSVersion.Major -lt 7) {
+    $threadJobInstalled = Get-InstalledModule -Name Threadjob -ErrorAction SilentlyContinue
+    if (!$threadJobInstalled) {
+        Write-Output "ThreadJob module not found. Please install the ThreadJob module to run this script."
+        throw
+    }
+}
+
 if (!$SubscriptionIds) {
     # Only retrieve FSCP 3.0 subscriptions
     if ($ProdOnly) {
@@ -199,248 +207,248 @@ foreach ($sub in $AllSubscriptions) {
 
         $storageJobs += Start-Threadjob -ScriptBlock {
 
-        $strg = $using:strg
+            $strg = $using:strg
 
-        $strgControlArray = @()
+            $strgControlArray = @()
 
-        foreach ($control in $using:StorageControls) {
-            $strgCheck = $control.Split(';')
-            $strgCheckName = $strgCheck[0]
-            $strgCheckPillars = $strgCheck[1].Split(',')
-            $strgCheckWeight = $strgCheck[2]
-    
-            $strgControlArray += [PSCustomObject]@{
-                Name = $strgCheckName
-                Pillars = $strgCheckPillars
-                Weight = $strgCheckWeight
-                Result = $null
-            }
-        }
-
-        $strgTotalWeight = 0
-        foreach ($control in $strgControlArray) {
-            $strgTotalWeight += $control.Weight
-        }
-
-        $tempStorageResults = @()
-        $tempStorageResults += ""
-        $tempStorageResults += "----- Storage Account - $($strg.name) -----"
-        $tempStorageResults += ""
+            foreach ($control in $using:StorageControls) {
+                $strgCheck = $control.Split(';')
+                $strgCheckName = $strgCheck[0]
+                $strgCheckPillars = $strgCheck[1].Split(',')
+                $strgCheckWeight = $strgCheck[2]
         
-        # Turn on soft delete for blob data
-        $BlobProperties = az storage account blob-service-properties show --account-name $strg.name 2> $null 
-        if ($?) {
-            $RetentionPolicy = $BlobProperties | ConvertFrom-Json -Depth 10 | Select-Object deleteRetentionPolicy
-        }
-        else {
-            Write-Error "Unable to check blob data retention settings for storage account $($strg.name)."
-        }
-        
-        if ($RetentionPolicy.deleteRetentionPolicy.enabled) {
-            $tempStorageResults += "Good: Soft Delete is active for $($strg.name)"
-            $strgControlArray[0].Result = 100
-        }
-        else {
-            $tempStorageResults += "Bad: Soft Delete is NOT active for $($strg.name)"
-            $strgControlArray[0].Result = 0
-        }
-        $RetentionPolicy = $null
-
-        # Use Microsoft Entra ID to authorize access to blob data
-        if ($strg.allowBlobPublicAccess -match 'False') {
-            $tempStorageResults += "Good: Public access is disabled for blob data on storage account $($strg.name)."
-            $strgControlArray[1].Result = 100
-        }
-        else {
-            $tempStorageResults += "Bad: Public access is ENABLED for blob data on storage account $($strg.name)."
-            $strgControlArray[1].Result = 0
-        }
-
-        # Use blob versioning or immutable blobs to store business-critical data.
-        ## Unable to query immutability due to this information being stored on container level, requiring a connection string, storage account key or SAS token.
-        if (($BlobProperties | ConvertFrom-Json -Depth 10).isVersioningEnabled) {
-            $tempStorageResults += "Good: Versioning is enabled for storage account $($strg.name)."
-            $strgControlArray[2].Result = 100
-        }
-        else {
-            $tempStorageResults += "Informational: Versioning is not enabled for storage account $($strg.name). Immutability might be enabled on container level, but can not be checked."
-            $strgControlArray[2].Result = 50
-        }
-        #az storage container list --account-name $strg.name --query '[*].{"ContainerName":name, "TimeBasedRetentionPolicy":properties.hasImmutabilityPolicy, "LegalHoldPolicy": properties.hasLegalHold}'
-
-        # Restrict default internet access for storage accounts.
-        if ($strg.networkRuleSet.defaultAction -match 'Deny') {
-            $tempStorageResults += "Good: Default internet access for storage account $($strg.name) is set to Deny."
-            $strgControlArray[3].Result = 100
-        }
-        else {
-            $tempStorageResults += "Bad: Default internet access for storage account $($strg.name) is NOT set to Deny."
-            $strgControlArray[3].Result = 0
-        }
-
-        # Enable firewall rules.
-        if ($strg.networkRuleSet) {
-            $tempStorageResults += "Good: Firewall is active for storage account $($strg.name)."
-            $strgControlArray[4].Result = 100
-        }
-        else {
-            $tempStorageResults += "Bad: Firewall is NOT active for storage account $($strg.name)."
-            $strgControlArray[4].Result = 0
-        }
-
-        # Limit network access to specific networks.
-        if ($strg.allowBlobPublicAccess -match 'False') {
-            $tempStorageResults += "Good: Blob Public Access is disabled for storage account $($strg.name)."
-            $strgControlArray[5].Result = 100
-        }
-        else {
-            $tempStorageResults += "Bad: Blob Public Access is NOT disabled for storage account $($strg.name)."
-            $strgControlArray[5].Result = 0
-        }
-
-        # Allow trusted Microsoft services to access the storage account.
-        if ($strg.networkRuleSet.bypass -match 'AzureServices') {
-            $tempStorageResults += "Good: Microsoft Azure Services are whitelisted for storage account $($strg.name)."
-            $strgControlArray[6].Result = 100
-        }
-        else {
-            $tempStorageResults += "Bad: Microsoft Azure Services are NOT whitelisted for storage account $($strg.name)."
-            $strgControlArray[6].Result = 0
-        }
-
-        # Enable the Secure transfer required option on all your storage accounts.
-        if ($strg.enableHttpsTrafficOnly -match 'True') {
-            $tempStorageResults += "Good: Secure Transfer (HTTPS) is enforced for storage account $($strg.name)."
-            $strgControlArray[7].Result = 100
-        }
-        else {
-            $tempStorageResults += "Bad: Secure Transfer (HTTPS) is NOT enforced for storage account $($strg.name)."
-            $strgControlArray[7].Result = 0
-        }
-
-        # Avoid and prevent using Shared Key authorization to access storage accounts.
-        if ($strg.allowSharedKeyAccess -match 'False') {
-            $tempStorageResults += "Good: Shared Key authorization is disabled for storage account $($strg.name)."
-            $strgControlArray[8].Result = 100
-        }
-        else {
-            $tempStorageResults += "Bad: Shared Key authorization is NOT disabled for storage account $($strg.name)."
-            $strgControlArray[8].Result = 0
-        }
-        
-        # Regenerate your account keys periodically.
-        $RegenerationLogs = az monitor activity-log list --resource-group $strg.resourceGroup --status Succeeded --offset 90d --query '[*].{authorization:authorization.action,eventTimestamp:eventTimestamp}' | ConvertFrom-Json -Depth 10
-        $Regenerated = $false
-        foreach ($RegenLog in $RegenerationLogs) {
-            if ($RegenLog -match 'Microsoft.Storage/storageAccounts/regenerateKey/action') {
-                if ($RegenLog.eventTimestamp -gt (Get-Date).AddDays(-90)) {
-                    $Regenerated = $true
+                $strgControlArray += [PSCustomObject]@{
+                    Name = $strgCheckName
+                    Pillars = $strgCheckPillars
+                    Weight = $strgCheckWeight
+                    Result = $null
                 }
             }
-        }
-        if ($Regenerated) {
-            $tempStorageResults += "Good: Storage account keys have been regenerated in the past 90 days for storage account $($strg.name)."
-            $strgControlArray[9].Result = 100
-        }
-        else {
-            $tempStorageResults += "Bad: Storage account keys have NOT been regenerated in the past 90 days for storage account $($strg.name)."
-            $strgControlArray[9].Result = 0
-        }
 
-        # Enable Azure Defender for all your storage accounts.
-        if ($using:DefenderActive) {
-            $tempStorageResults += "Good: Defender for Storage is enabled for storage account $($strg.name)."
-            $strgControlArray[10].Result = 100
-        }
-        else {
-            $tempStorageResults += "Bad: Defender for Storage is NOT enabled for storage account $($strg.name)."
-            $strgControlArray[10].Result = 0
-        }
+            $strgTotalWeight = 0
+            foreach ($control in $strgControlArray) {
+                $strgTotalWeight += $control.Weight
+            }
 
-        # Consider cost savings by reserving data capacity for block blob storage.
-        ## This requires access to the container where the blob is stored, requiring a connection string, storage account key or SAS token.
+            $tempStorageResults = @()
+            $tempStorageResults += ""
+            $tempStorageResults += "----- Storage Account - $($strg.name) -----"
+            $tempStorageResults += ""
+            
+            # Turn on soft delete for blob data
+            $BlobProperties = az storage account blob-service-properties show --account-name $strg.name 2> $null 
+            if ($?) {
+                $RetentionPolicy = $BlobProperties | ConvertFrom-Json -Depth 10 | Select-Object deleteRetentionPolicy
+            }
+            else {
+                Write-Error "Unable to check blob data retention settings for storage account $($strg.name)."
+            }
+            
+            if ($RetentionPolicy.deleteRetentionPolicy.enabled) {
+                $tempStorageResults += "Good: Soft Delete is active for $($strg.name)"
+                $strgControlArray[0].Result = 100
+            }
+            else {
+                $tempStorageResults += "Bad: Soft Delete is NOT active for $($strg.name)"
+                $strgControlArray[0].Result = 0
+            }
+            $RetentionPolicy = $null
 
-        # Organize data into access tiers.
-        if ($strg.accessTier -match 'Hot') {
-            $tempStorageResults += "Informational: Storage account $($strg.name) has an access tier of 'Hot'. Depending on usage demand, costs could be reduced by choosing a lower tier."
-            $strgControlArray[11].Result = 100
-        }
-        else {
-            $tempStorageResults += "Informational: Storage account $($strg.name) has an access tier of '$($strg.accessTier)'."
-            $strgControlArray[11].Result = 100
-        }
-        
-        # Use lifecycle policy to move data between access tiers.
-        $policy = az storage account management-policy show --account-name $strg.name --resource-group $strg.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
-        if (($BlobProperties | ConvertFrom-Json -Depth 10).lastAccessTimeTrackingPolicy) {
-            $tempStorageResults += "Good: Last access time tracking Lifecycle policy found for storage account $($strg.name)."
-            $strgControlArray[12].Result = 100
-        }
-        elseif ($policy) {
-            if ($policy.policy.rules.type -match 'Lifecycle') {
-                $tempStorageResults += "Good: Data deletion Lifecycle policy found for storage account $($strg.name)."
+            # Use Microsoft Entra ID to authorize access to blob data
+            if ($strg.allowBlobPublicAccess -match 'False') {
+                $tempStorageResults += "Good: Public access is disabled for blob data on storage account $($strg.name)."
+                $strgControlArray[1].Result = 100
+            }
+            else {
+                $tempStorageResults += "Bad: Public access is ENABLED for blob data on storage account $($strg.name)."
+                $strgControlArray[1].Result = 0
+            }
+
+            # Use blob versioning or immutable blobs to store business-critical data.
+            ## Unable to query immutability due to this information being stored on container level, requiring a connection string, storage account key or SAS token.
+            if (($BlobProperties | ConvertFrom-Json -Depth 10).isVersioningEnabled) {
+                $tempStorageResults += "Good: Versioning is enabled for storage account $($strg.name)."
+                $strgControlArray[2].Result = 100
+            }
+            else {
+                $tempStorageResults += "Informational: Versioning is not enabled for storage account $($strg.name). Immutability might be enabled on container level, but can not be checked."
+                $strgControlArray[2].Result = 50
+            }
+            #az storage container list --account-name $strg.name --query '[*].{"ContainerName":name, "TimeBasedRetentionPolicy":properties.hasImmutabilityPolicy, "LegalHoldPolicy": properties.hasLegalHold}'
+
+            # Restrict default internet access for storage accounts.
+            if ($strg.networkRuleSet.defaultAction -match 'Deny') {
+                $tempStorageResults += "Good: Default internet access for storage account $($strg.name) is set to Deny."
+                $strgControlArray[3].Result = 100
+            }
+            else {
+                $tempStorageResults += "Bad: Default internet access for storage account $($strg.name) is NOT set to Deny."
+                $strgControlArray[3].Result = 0
+            }
+
+            # Enable firewall rules.
+            if ($strg.networkRuleSet) {
+                $tempStorageResults += "Good: Firewall is active for storage account $($strg.name)."
+                $strgControlArray[4].Result = 100
+            }
+            else {
+                $tempStorageResults += "Bad: Firewall is NOT active for storage account $($strg.name)."
+                $strgControlArray[4].Result = 0
+            }
+
+            # Limit network access to specific networks.
+            if ($strg.allowBlobPublicAccess -match 'False') {
+                $tempStorageResults += "Good: Blob Public Access is disabled for storage account $($strg.name)."
+                $strgControlArray[5].Result = 100
+            }
+            else {
+                $tempStorageResults += "Bad: Blob Public Access is NOT disabled for storage account $($strg.name)."
+                $strgControlArray[5].Result = 0
+            }
+
+            # Allow trusted Microsoft services to access the storage account.
+            if ($strg.networkRuleSet.bypass -match 'AzureServices') {
+                $tempStorageResults += "Good: Microsoft Azure Services are whitelisted for storage account $($strg.name)."
+                $strgControlArray[6].Result = 100
+            }
+            else {
+                $tempStorageResults += "Bad: Microsoft Azure Services are NOT whitelisted for storage account $($strg.name)."
+                $strgControlArray[6].Result = 0
+            }
+
+            # Enable the Secure transfer required option on all your storage accounts.
+            if ($strg.enableHttpsTrafficOnly -match 'True') {
+                $tempStorageResults += "Good: Secure Transfer (HTTPS) is enforced for storage account $($strg.name)."
+                $strgControlArray[7].Result = 100
+            }
+            else {
+                $tempStorageResults += "Bad: Secure Transfer (HTTPS) is NOT enforced for storage account $($strg.name)."
+                $strgControlArray[7].Result = 0
+            }
+
+            # Avoid and prevent using Shared Key authorization to access storage accounts.
+            if ($strg.allowSharedKeyAccess -match 'False') {
+                $tempStorageResults += "Good: Shared Key authorization is disabled for storage account $($strg.name)."
+                $strgControlArray[8].Result = 100
+            }
+            else {
+                $tempStorageResults += "Bad: Shared Key authorization is NOT disabled for storage account $($strg.name)."
+                $strgControlArray[8].Result = 0
+            }
+            
+            # Regenerate your account keys periodically.
+            $RegenerationLogs = az monitor activity-log list --resource-group $strg.resourceGroup --status Succeeded --offset 90d --query '[*].{authorization:authorization.action,eventTimestamp:eventTimestamp}' | ConvertFrom-Json -Depth 10
+            $Regenerated = $false
+            foreach ($RegenLog in $RegenerationLogs) {
+                if ($RegenLog -match 'Microsoft.Storage/storageAccounts/regenerateKey/action') {
+                    if ($RegenLog.eventTimestamp -gt (Get-Date).AddDays(-90)) {
+                        $Regenerated = $true
+                    }
+                }
+            }
+            if ($Regenerated) {
+                $tempStorageResults += "Good: Storage account keys have been regenerated in the past 90 days for storage account $($strg.name)."
+                $strgControlArray[9].Result = 100
+            }
+            else {
+                $tempStorageResults += "Bad: Storage account keys have NOT been regenerated in the past 90 days for storage account $($strg.name)."
+                $strgControlArray[9].Result = 0
+            }
+
+            # Enable Azure Defender for all your storage accounts.
+            if ($using:DefenderActive) {
+                $tempStorageResults += "Good: Defender for Storage is enabled for storage account $($strg.name)."
+                $strgControlArray[10].Result = 100
+            }
+            else {
+                $tempStorageResults += "Bad: Defender for Storage is NOT enabled for storage account $($strg.name)."
+                $strgControlArray[10].Result = 0
+            }
+
+            # Consider cost savings by reserving data capacity for block blob storage.
+            ## This requires access to the container where the blob is stored, requiring a connection string, storage account key or SAS token.
+
+            # Organize data into access tiers.
+            if ($strg.accessTier -match 'Hot') {
+                $tempStorageResults += "Informational: Storage account $($strg.name) has an access tier of 'Hot'. Depending on usage demand, costs could be reduced by choosing a lower tier."
+                $strgControlArray[11].Result = 100
+            }
+            else {
+                $tempStorageResults += "Informational: Storage account $($strg.name) has an access tier of '$($strg.accessTier)'."
+                $strgControlArray[11].Result = 100
+            }
+            
+            # Use lifecycle policy to move data between access tiers.
+            $policy = az storage account management-policy show --account-name $strg.name --resource-group $strg.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+            if (($BlobProperties | ConvertFrom-Json -Depth 10).lastAccessTimeTrackingPolicy) {
+                $tempStorageResults += "Good: Last access time tracking Lifecycle policy found for storage account $($strg.name)."
                 $strgControlArray[12].Result = 100
             }
-        }
-        else {
-            $tempStorageResults += "Bad: No Lifecycle policy found for storage account $($strg.name)."
-            $strgControlArray[12].Result = 0
-        }
-        $policy = $null
+            elseif ($policy) {
+                if ($policy.policy.rules.type -match 'Lifecycle') {
+                    $tempStorageResults += "Good: Data deletion Lifecycle policy found for storage account $($strg.name)."
+                    $strgControlArray[12].Result = 100
+                }
+            }
+            else {
+                $tempStorageResults += "Bad: No Lifecycle policy found for storage account $($strg.name)."
+                $strgControlArray[12].Result = 0
+            }
+            $policy = $null
 
-        # Check for Publicly Accessible Web Containers
-        ## Unable to query due to this information being stored on container level, requiring a connection string, storage account key or SAS token.
-        #az storage container show --account-name $strg.name --name insights-operational-logs --query 'properties.publicAccess'
+            # Check for Publicly Accessible Web Containers
+            ## Unable to query due to this information being stored on container level, requiring a connection string, storage account key or SAS token.
+            #az storage container show --account-name $strg.name --name insights-operational-logs --query 'properties.publicAccess'
 
-        # Configure Minimum TLS Version
-        if ($strg.minimumTlsVersion -match 'TLS1_2') {
-            $tempStorageResults += "Good: TLS 1.2 is the minimum TLS version allowed on storage account $($strg.name)."
-            $strgControlArray[13].Result = 100
-        }
-        else {
-            $tempStorageResults += "Bad: The minimum version is NOT set to TLS 1.2 on storage account $($strg.name)."
-            $strgControlArray[13].Result = 0
-        }
+            # Configure Minimum TLS Version
+            if ($strg.minimumTlsVersion -match 'TLS1_2') {
+                $tempStorageResults += "Good: TLS 1.2 is the minimum TLS version allowed on storage account $($strg.name)."
+                $strgControlArray[13].Result = 100
+            }
+            else {
+                $tempStorageResults += "Bad: The minimum version is NOT set to TLS 1.2 on storage account $($strg.name)."
+                $strgControlArray[13].Result = 0
+            }
 
-        # Enable Infrastructure Encryption
-        if ($strg.encryption.requireInfrastructureEncryption -match $True) {
-            $tempStorageResults += "Good: Storage Account Infrastructure Encryption is enabled for storage account $($strg.name)."
-            $strgControlArray[14].Result = 100
-        }
-        else {
-            $tempStorageResults += "Bad: Storage Account Infrastructure Encryption is NOT enabled for storage account $($strg.name)."
-            $strgControlArray[14].Result = 0
-        }
+            # Enable Infrastructure Encryption
+            if ($strg.encryption.requireInfrastructureEncryption -match $True) {
+                $tempStorageResults += "Good: Storage Account Infrastructure Encryption is enabled for storage account $($strg.name)."
+                $strgControlArray[14].Result = 100
+            }
+            else {
+                $tempStorageResults += "Bad: Storage Account Infrastructure Encryption is NOT enabled for storage account $($strg.name)."
+                $strgControlArray[14].Result = 0
+            }
 
-        # Private Endpoint in Use
-        if ($strg.privateEndpointConnections) {
-            $tempStorageResults += "Good: A Private Endpoint is attached to storage account $($strg.name)."
-            $strgControlArray[15].Result = 100
-        }
-        else {
-            $tempStorageResults += "Bad: No Private Endpoint is attached to storage account $($strg.name)."
-            $strgControlArray[15].Result = 0
-        }
+            # Private Endpoint in Use
+            if ($strg.privateEndpointConnections) {
+                $tempStorageResults += "Good: A Private Endpoint is attached to storage account $($strg.name)."
+                $strgControlArray[15].Result = 100
+            }
+            else {
+                $tempStorageResults += "Bad: No Private Endpoint is attached to storage account $($strg.name)."
+                $strgControlArray[15].Result = 0
+            }
 
-        # Storage Account Encryption using Customer Managed Keys
-        if ($strg.encryption.keyVaultProperties.keyName) {
-            $tempStorageResults += "Good: Storage account $($strg.name) is encrypted using Customer Managed Keys."
-            $strgControlArray[16].Result = 100
-        }
-        else {
-            $tempStorageResults += "Bad: Storage account $($strg.name) is NOT encrypted using Customer Managed Keys."
-            $strgControlArray[16].Result = 0
-        }
+            # Storage Account Encryption using Customer Managed Keys
+            if ($strg.encryption.keyVaultProperties.keyName) {
+                $tempStorageResults += "Good: Storage account $($strg.name) is encrypted using Customer Managed Keys."
+                $strgControlArray[16].Result = 100
+            }
+            else {
+                $tempStorageResults += "Bad: Storage account $($strg.name) is NOT encrypted using Customer Managed Keys."
+                $strgControlArray[16].Result = 0
+            }
 
-        # Calculate the weighted average for the storage account
-        $storageScore = $strgControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
-        $storageAvgScore = $storageScore / $strgTotalWeight
-        $roundedStorageAvg = [math]::Round($storageAvgScore, 1)
+            # Calculate the weighted average for the storage account
+            $storageScore = $strgControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
+            $storageAvgScore = $storageScore / $strgTotalWeight
+            $roundedStorageAvg = [math]::Round($storageAvgScore, 1)
 
-        $tempStorageResults += ""
-        $tempStorageResults += "Storage Account $($strg.name) has an average score of $roundedStorageAvg %."
-    
-        $tempStorageResults,$strgControlArray,$storageScore,$strgTotalWeight
+            $tempStorageResults += ""
+            $tempStorageResults += "Storage Account $($strg.name) has an average score of $roundedStorageAvg %."
+        
+            $tempStorageResults,$strgControlArray,$storageScore,$strgTotalWeight
         }
     }
 
@@ -499,144 +507,160 @@ foreach ($sub in $AllSubscriptions) {
     $kvTotalScore = 0
 
     # Note: There are no controls described for Key Vaults in the Microsoft WAF documentation.
-    # We will primarily be using the Conformity checks, as well as IT Guardrail checks.
+    # We will primarily be using custom ABN checks.
+
+    $vaultJobs = @()
     
     foreach ($keyvault in $Keyvaults) {
 
         Write-Output "Checking Key Vault $($keyvault.name)..."
 
-        $kvControlArray = @()
+        $vaultJobs += Start-Threadjob -ScriptBlock {
 
-        foreach ($control in $KeyvaultControls) {
-            $kvCheck = $control.Split(';')
-            $kvCheckName = $kvCheck[0]
-            $kvCheckPillars = $kvCheck[1].Split(',')
-            $kvCheckWeight = $kvCheck[2]
-    
-            $kvControlArray += [PSCustomObject]@{
-                Name = $kvCheckName
-                Pillars = $kvCheckPillars
-                Weight = $kvCheckWeight
-                Result = $null
-            }
-        }
+            $keyvault = $using:keyvault
 
-        # Calculate total weight to calculate weighted average
-        $kvTotalWeight = Get-TotalWeights($kvControlArray)
+            $kvControlArray = @()
 
-        $VaultResults += ""
-        $VaultResults += "----- Key Vault - $($keyvault.name) -----"
-        $VaultResults += ""
-
-        # Check for presence of AppName tag
-        if ($keyvault.tags.AppName) {
-            $VaultResults += "Good: AppName tag is present on Key Vault $($keyvault.name)"
-            $kvControlArray[0].Result = 100
-        }
-        else {
-            $VaultResults += "Bad: AppName tag is NOT present on Key Vault $($keyvault.name)"
-            $kvControlArray[0].Result = 0
-        }
-
-        # Check for presence of CI tag
-        if ($keyvault.tags.'Business Application CI') {
-            $VaultResults += "Good: Application CI tag is present on Key Vault $($keyvault.name)"
-            $kvControlArray[1].Result = 100
-        }
-        else {
-            $VaultResults += "Bad: Application CI tag is NOT present on Key Vault $($keyvault.name)"
-            $kvControlArray[1].Result = 0
-        }
-
-        # Check for presence of CIA tag
-        if ($keyvault.tags.CIA) {
-            $VaultResults += "Good: CIA tag is present on Key Vault $($keyvault.name)"
-            $kvControlArray[2].Result = 100
-        }
-        else {
-            $VaultResults += "Bad: CIA tag is NOT present on Key Vault $($keyvault.name)"
-            $kvControlArray[2].Result = 0
-        }
-
-        # Check for Key Vault Full Administrator Permissions
-        $vaultsettings = az keyvault show --name $keyvault.name | ConvertFrom-Json -Depth 10
-        if ('All' -in $vaultsettings.properties.accesspolicies.permissions.certificates -or 'All' -in $vaultsettings.properties.accesspolicies.permissions.keys -or 'All' -in $vaultsettings.properties.accesspolicies.permissions.secrets -or 'All' -in $vaultsettings.properties.accesspolicies.permissions.storage) {
-            $VaultResults += "Bad: Full access permissions found on keyvault $($keyvault.name):"
-            foreach ($perm in $vaultsettings.properties.accesspolicies) {
-                if ('All' -in $perm.permissions.certificates -or 'All' -in $perm.permissions.keys -or 'All' -in $perm.permissions.secrets -or 'All' -in $perm.permissions.storage) {
-                    $VaultResults += "Principal with ID $($perm.objectId) has Full Access on one or all of Certificates/Keys/Secrets/Storage."
+            foreach ($control in $using:KeyvaultControls) {
+                $kvCheck = $control.Split(';')
+                $kvCheckName = $kvCheck[0]
+                $kvCheckPillars = $kvCheck[1].Split(',')
+                $kvCheckWeight = $kvCheck[2]
+        
+                $kvControlArray += [PSCustomObject]@{
+                    Name = $kvCheckName
+                    Pillars = $kvCheckPillars
+                    Weight = $kvCheckWeight
+                    Result = $null
                 }
             }
-            $kvControlArray[3].Result = 0
-        }
-        else {
-            $VaultResults += "Good: No Full Access permissions found on keyvault $($keyvault.name)"
-            $kvControlArray[3].Result = 100
-        }
 
-        # Audit event logging should be active for Azure Key Vault
-        $diag = az monitor diagnostic-settings list --resource $keyvault.id --query '[*].logs | []' | ConvertFrom-Json -Depth 10
-        if (($diag | Where-Object {$_.category -eq 'AuditEvent'}).enabled -eq $True) {
-            $VaultResults += "Good: Audit Events are logged for keyvault $($keyvault.name)."
-            $kvControlArray[4].Result = 100
-        }
-        else {
-            $VaultResults += "Bad: Audit Events are NOT logged for keyvault $($keyvault.name)."
-            $kvControlArray[4].Result = 0
-        }
+            # Calculate total weight to calculate weighted average
+            $kvTotalWeight = Get-TotalWeights($kvControlArray)
 
-        # Purge Protection should be enabled for Azure Key Vault
-        if ($vaultsettings.properties.enablePurgeProtection -eq 'True') {
-            $VaultResults += "Good: Purge Protection is enabled for keyvault $($keyvault.name)"
-            $kvControlArray[5].Result = 100
-        }
-        else {
-            $VaultResults += "Bad: Purge Protection is NOT enabled for keyvault $($keyvault.name)"
-            $kvControlArray[5].Result = 0
-        }
+            $tempVaultResults = @()
+            $tempVaultResults += ""
+            $tempVaultResults += "----- Key Vault - $($keyvault.name) -----"
+            $tempVaultResults += ""
 
-        # Soft Delete should be enabled for Azure Key Vault
-        if ($vaultsettings.properties.enableSoftDelete -eq 'True') {
-            $VaultResults += "Good: Soft Delete is enabled for keyvault $($keyvault.name)"
-            $kvControlArray[6].Result = 100
-        }
-        else {
-            $VaultResults += "Bad: Soft Delete is NOT enabled for keyvault $($keyvault.name)"
-            $kvControlArray[6].Result = 0
-        }
+            # Check for presence of AppName tag
+            if ($keyvault.tags.AppName) {
+                $tempVaultResults += "Good: AppName tag is present on Key Vault $($keyvault.name)"
+                $kvControlArray[0].Result = 100
+            }
+            else {
+                $tempVaultResults += "Bad: AppName tag is NOT present on Key Vault $($keyvault.name)"
+                $kvControlArray[0].Result = 0
+            }
 
-        # Allow trusted Microsoft services to access the Key Vault
-        if ($vaultsettings.properties.networkAcls.bypass -match 'AzureServices') {
-            $VaultResults += "Good: Microsoft Azure services are whitelisted for $($keyvault.name)"
-            $kvControlArray[7].Result = 100
-        }
-        else {
-            $VaultResults += "Bad: Microsoft Azure services are NOT whitelisted for $($keyvault.name)"
-            $kvControlArray[7].Result = 0
-        }
+            # Check for presence of CI tag
+            if ($keyvault.tags.'Business Application CI') {
+                $tempVaultResults += "Good: Application CI tag is present on Key Vault $($keyvault.name)"
+                $kvControlArray[1].Result = 100
+            }
+            else {
+                $tempVaultResults += "Bad: Application CI tag is NOT present on Key Vault $($keyvault.name)"
+                $kvControlArray[1].Result = 0
+            }
 
-        # Restrict Default Network Access for Azure Key Vaults
-        if ($vaultsettings.properties.networkAcls.defaultAction -match 'Deny') {
-            $VaultResults += "Good: Network access is denied by default for $($keyvault.name)"
-            $kvControlArray[8].Result = 100
+            # Check for presence of CIA tag
+            if ($keyvault.tags.CIA) {
+                $tempVaultResults += "Good: CIA tag is present on Key Vault $($keyvault.name)"
+                $kvControlArray[2].Result = 100
+            }
+            else {
+                $tempVaultResults += "Bad: CIA tag is NOT present on Key Vault $($keyvault.name)"
+                $kvControlArray[2].Result = 0
+            }
+
+            # Check for Key Vault Full Administrator Permissions
+            $vaultsettings = az keyvault show --name $keyvault.name | ConvertFrom-Json -Depth 10
+            if ('All' -in $vaultsettings.properties.accesspolicies.permissions.certificates -or 'All' -in $vaultsettings.properties.accesspolicies.permissions.keys -or 'All' -in $vaultsettings.properties.accesspolicies.permissions.secrets -or 'All' -in $vaultsettings.properties.accesspolicies.permissions.storage) {
+                $tempVaultResults += "Bad: Full access permissions found on keyvault $($keyvault.name):"
+                foreach ($perm in $vaultsettings.properties.accesspolicies) {
+                    if ('All' -in $perm.permissions.certificates -or 'All' -in $perm.permissions.keys -or 'All' -in $perm.permissions.secrets -or 'All' -in $perm.permissions.storage) {
+                        $tempVaultResults += "Principal with ID $($perm.objectId) has Full Access on one or all of Certificates/Keys/Secrets/Storage."
+                    }
+                }
+                $kvControlArray[3].Result = 0
+            }
+            else {
+                $tempVaultResults += "Good: No Full Access permissions found on keyvault $($keyvault.name)"
+                $kvControlArray[3].Result = 100
+            }
+
+            # Audit event logging should be active for Azure Key Vault
+            $diag = az monitor diagnostic-settings list --resource $keyvault.id --query '[*].logs | []' | ConvertFrom-Json -Depth 10
+            if (($diag | Where-Object {$_.category -eq 'AuditEvent'}).enabled -eq $True) {
+                $tempVaultResults += "Good: Audit Events are logged for keyvault $($keyvault.name)."
+                $kvControlArray[4].Result = 100
+            }
+            else {
+                $tempVaultResults += "Bad: Audit Events are NOT logged for keyvault $($keyvault.name)."
+                $kvControlArray[4].Result = 0
+            }
+
+            # Purge Protection should be enabled for Azure Key Vault
+            if ($vaultsettings.properties.enablePurgeProtection -eq 'True') {
+                $tempVaultResults += "Good: Purge Protection is enabled for keyvault $($keyvault.name)"
+                $kvControlArray[5].Result = 100
+            }
+            else {
+                $tempVaultResults += "Bad: Purge Protection is NOT enabled for keyvault $($keyvault.name)"
+                $kvControlArray[5].Result = 0
+            }
+
+            # Soft Delete should be enabled for Azure Key Vault
+            if ($vaultsettings.properties.enableSoftDelete -eq 'True') {
+                $tempVaultResults += "Good: Soft Delete is enabled for keyvault $($keyvault.name)"
+                $kvControlArray[6].Result = 100
+            }
+            else {
+                $tempVaultResults += "Bad: Soft Delete is NOT enabled for keyvault $($keyvault.name)"
+                $kvControlArray[6].Result = 0
+            }
+
+            # Allow trusted Microsoft services to access the Key Vault
+            if ($vaultsettings.properties.networkAcls.bypass -match 'AzureServices') {
+                $tempVaultResults += "Good: Microsoft Azure services are whitelisted for $($keyvault.name)"
+                $kvControlArray[7].Result = 100
+            }
+            else {
+                $tempVaultResults += "Bad: Microsoft Azure services are NOT whitelisted for $($keyvault.name)"
+                $kvControlArray[7].Result = 0
+            }
+
+            # Restrict Default Network Access for Azure Key Vaults
+            if ($vaultsettings.properties.networkAcls.defaultAction -match 'Deny') {
+                $tempVaultResults += "Good: Network access is denied by default for $($keyvault.name)"
+                $kvControlArray[8].Result = 100
+            }
+            else {
+                $tempVaultResults += "Bad: Network access is NOT denied by default for $($keyvault.name)"
+                $kvControlArray[8].Result = 0
+            }
+
+            # Calculate the weighted average for the key vault
+            $kvScore = $kvControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
+            $kvAvgScore = $kvScore / $kvTotalWeight
+            $roundedKvAvg = [math]::Round($kvAvgScore, 1)
+
+            $tempVaultResults += ""
+            $tempVaultResults += "Key Vault $($keyvault.name) has an average score of $roundedKvAvg %."
+
+            $tempVaultResults,$kvControlArray,$kvScore,$kvTotalWeight
         }
-        else {
-            $VaultResults += "Bad: Network access is NOT denied by default for $($keyvault.name)"
-            $kvControlArray[8].Result = 0
-        }
-
-        # Calculate the weighted average for the key vault
-        $kvScore = $kvControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
-        $kvAvgScore = $kvScore / $kvTotalWeight
-        $roundedKvAvg = [math]::Round($kvAvgScore, 1)
-
-        $VaultResults += ""
-        $VaultResults += "Key Vault $($keyvault.name) has an average score of $roundedKvAvg %."
-
-        $kvTotalScore += $kvScore
     }
 
     if ($Keyvaults) {
+        Write-Output "Waiting for key vault checks to complete..."
+
+        foreach ($job in ($vaultJobs | Wait-Job)) {
+            $tempVaultResults,$kvControlArray,$kvScore,$kvTotalWeight = Receive-Job -Job $job
+            $VaultResults += $tempVaultResults
+            $kvTotalScore += $kvScore
+        }
+        
         $kvTotalAvg = $kvTotalScore / ($kvTotalWeight * $Keyvaults.Count)
         $roundedKvTotalAvg = [math]::Round($kvTotalAvg, 1)
 
