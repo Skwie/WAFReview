@@ -2912,5 +2912,7 @@ foreach ($sub in $AllSubscriptions) {
 
     Write-Output "Results may be truncated if they do not fit in the terminal. For full results, please check the output file."
 
+    $Error > ".\results\errors.txt"
+
     # End region
 }
