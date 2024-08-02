@@ -1622,28 +1622,6 @@ foreach ($sub in $AllSubscriptions) {
             $server = $using:server
             $tempPostgreSQLResults = @()
 
-            $serverStatus = $null
-
-            $serverDetails = az postgres server show --name $server.name --resource-group $server.resourceGroup | ConvertFrom-Json -Depth 10
-            if ($?) {
-                $serverStatus = "single"
-                $tempPostgreSQLResults += ""
-                $tempPostgreSQLResults += "$server.name is a PostgreSQL single server. Single server is due to be deprecated in March 2025. Consider migrating to a flexible server."
-            }
-            else {
-                $serverDetails = az postgres flexible-server show --name $server.name --resource-group $server.resourceGroup | ConvertFrom-Json -Depth 10
-                if ($?) {
-                    $serverStatus = "flexible"
-                }
-            }
-            
-            if (!$serverDetails) {
-                $tempPostgreSQLResults += ""
-                $tempPostgreSQLResults += "Unable to retrieve server details for PostgreSQL server $($server.name). This is most likely due to insufficient permissions. Skipping..."
-                $tempPostgreSQLResults += ""
-                Continue
-            }
-
             $postgreSQLControlArray = @()
 
             foreach ($control in $using:PostgreSQLControls) {
@@ -1669,6 +1647,28 @@ foreach ($sub in $AllSubscriptions) {
             $tempPostgreSQLResults += ""
             $tempPostgreSQLResults += "----- PostgreSQL Server - $($server.name) -----"
             $tempPostgreSQLResults += ""
+
+            $serverStatus = $null
+
+            $serverDetails = az postgres server show --name $server.name --resource-group $server.resourceGroup | ConvertFrom-Json -Depth 10
+            if ($?) {
+                $serverStatus = "single"
+                $tempPostgreSQLResults += ""
+                $tempPostgreSQLResults += "$($server.name) is a PostgreSQL single server. Single server is due to be deprecated in March 2025. Consider migrating to a flexible server."
+            }
+            else {
+                $serverDetails = az postgres flexible-server show --name $server.name --resource-group $server.resourceGroup | ConvertFrom-Json -Depth 10
+                if ($?) {
+                    $serverStatus = "flexible"
+                }
+            }
+            
+            if (!$serverDetails) {
+                $tempPostgreSQLResults += ""
+                $tempPostgreSQLResults += "Unable to retrieve server details for PostgreSQL server $($server.name). This is most likely due to insufficient permissions. Skipping..."
+                $tempPostgreSQLResults += ""
+                Continue
+            }
 
             # Configure geo-redundancy backup
             if ($serverStatus -match 'single') {
@@ -2918,6 +2918,13 @@ foreach ($sub in $AllSubscriptions) {
     Write-Output "Results may be truncated if they do not fit in the terminal. For full results, please check the output file."
 
     $Error > ".\results\errors.txt"
+
+    # End region
+
+    ################## Region Cleanup ####################
+
+    # Remove all jobs
+    Get-Job | Remove-Job
 
     # End region
 }
