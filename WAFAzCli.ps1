@@ -2675,7 +2675,10 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Calculate total weight to calculate weighted average
-            $openAITotalWeight = Get-TotalWeights($openAIControlArray)
+            $openAITotalWeight = 0
+            foreach ($control in $openAIControlArray) {
+                $openAITotalWeight += $control.Weight
+            }
 
             $tempOpenAIResults += ""
             $tempOpenAIResults += "----- Azure OpenAI Resource - $($openAIResource.name) -----"
