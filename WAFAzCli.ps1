@@ -1140,34 +1140,33 @@ foreach ($sub in $AllSubscriptions) {
             $appDetails = az webapp show --name $appservice.name --resource-group $appservice.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
             $appServiceControlArray = @()
 
+            foreach ($control in $using:AppServiceControls) {
+                $appServiceCheck = $control.Split(';')
+                $appServiceCheckName = $appServiceCheck[0]
+                $appServiceCheckPillars = $appServiceCheck[1].Split(',')
+                $appServiceCheckWeight = $appServiceCheck[2]
+        
+                $appServiceControlArray += [PSCustomObject]@{
+                    Name = $appServiceCheckName
+                    Pillars = $appServiceCheckPillars
+                    Weight = $appServiceCheckWeight
+                    Result = $null
+                }
+            }
+
+            # Calculate total weight to calculate weighted average
+            $appServiceTotalWeight = 0
+            foreach ($control in $appServiceControlArray) {
+                $appServiceTotalWeight += $control.Weight
+            }
+
             if (!$appDetails) {
                 $tempSkippedAppServices += 1
                 Write-Host "Unable to retrieve app details for App Service $($appservice.name). This is most likely due to insufficient permissions. Skipping..."
                 $appServiceScore = 0
-                $appServiceTotalWeight = 0
                 $tempAppServiceResults,$appServiceControlArray,$appServiceScore,$appServiceTotalWeight,$tempSkippedAppServices
             }
             else {
-                foreach ($control in $using:AppServiceControls) {
-                    $appServiceCheck = $control.Split(';')
-                    $appServiceCheckName = $appServiceCheck[0]
-                    $appServiceCheckPillars = $appServiceCheck[1].Split(',')
-                    $appServiceCheckWeight = $appServiceCheck[2]
-            
-                    $appServiceControlArray += [PSCustomObject]@{
-                        Name = $appServiceCheckName
-                        Pillars = $appServiceCheckPillars
-                        Weight = $appServiceCheckWeight
-                        Result = $null
-                    }
-                }
-    
-                # Calculate total weight to calculate weighted average
-                $appServiceTotalWeight = 0
-                foreach ($control in $appServiceControlArray) {
-                    $appServiceTotalWeight += $control.Weight
-                }
-    
                 $tempAppServiceResults += ""
                 $tempAppServiceResults += "----- App Service - $($appservice.name) -----"
                 $tempAppServiceResults += ""
