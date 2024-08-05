@@ -48,14 +48,6 @@ param
 
 ################# Region Functions #################
 
-function Get-TotalWeights($array) {
-    $totalWeight = 0
-    foreach ($control in $array) {
-        $totalWeight += $control.Weight
-    }
-    return $totalWeight
-}
-
 function Get-WeightedAverage($array) {
     $score = $array | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
     $weight = $array | ForEach-Object { $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
@@ -205,6 +197,7 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     $storageJobs = @()
+    $strgControlArrayList = @()
 
     foreach ($strg in $StorageAccounts) {
 
@@ -465,6 +458,7 @@ foreach ($sub in $AllSubscriptions) {
             $tempStorageResults,$strgControlArray,$storageScore,$strgTotalWeight = Receive-Job -Job $job
             $StorageResults += $tempStorageResults
             $storageTotalScore += $storageScore
+            $strgControlArrayList += $strgControlArray
         }
 
         $storageTotalAvg = $storageTotalScore / ($strgTotalWeight * $StorageAccounts.Count)
@@ -516,6 +510,7 @@ foreach ($sub in $AllSubscriptions) {
     # We will primarily be using custom ABN checks.
 
     $vaultJobs = @()
+    $kvControlArrayList = @()
     
     foreach ($keyvault in $Keyvaults) {
 
@@ -668,6 +663,7 @@ foreach ($sub in $AllSubscriptions) {
             $tempVaultResults,$kvControlArray,$kvScore,$kvTotalWeight = Receive-Job -Job $job
             $VaultResults += $tempVaultResults
             $kvTotalScore += $kvScore
+            $kvControlArrayList += $kvControlArray
         }
 
         $kvTotalAvg = $kvTotalScore / ($kvTotalWeight * $Keyvaults.Count)
@@ -730,6 +726,7 @@ foreach ($sub in $AllSubscriptions) {
     $jitPolicies = az security jit-policy list --query '[*].virtualMachines | []' | ConvertFrom-Json -Depth 10
 
     $vmJobs = @()
+    $vmControlArrayList = @()
 
     foreach ($vm in $VirtualMachines) {
 
@@ -1058,6 +1055,7 @@ foreach ($sub in $AllSubscriptions) {
             $tempVMResults,$vmControlArray,$vmScore,$vmTotalWeight = Receive-Job -Job $job
             $VMResults += $tempVMResults
             $vmTotalScore += $vmScore
+            $vmControlArrayList += $vmControlArray
         }
 
         $vmTotalAvg = $vmTotalScore / ($vmTotalWeight * $VirtualMachines.Count)
@@ -1127,6 +1125,7 @@ foreach ($sub in $AllSubscriptions) {
     $skippedAppServices = 0
 
     $appServiceJobs = @()
+    $appServiceControlArrayList = @()
 
     foreach ($appservice in $AppServices) {
 
@@ -1541,6 +1540,7 @@ foreach ($sub in $AllSubscriptions) {
             if ($tempSkippedAppServices -eq 0) {
                 $AppServiceResults += $tempAppServiceResults
                 $appServiceTotalScore += $appServiceScore
+                $appServiceControlArrayList += $appServiceControlArray
             }
             else {
                 $skippedAppServices += $tempSkippedAppServices
@@ -1612,6 +1612,7 @@ foreach ($sub in $AllSubscriptions) {
     $PostgreSQLTotalScore = 0
 
     $postgreSQLJobs = @()
+    $postgreSQLControlArrayList = @()
 
     foreach ($server in $PostgreSQLServers) {
 
@@ -2021,6 +2022,7 @@ foreach ($sub in $AllSubscriptions) {
             $tempPostgreSQLResults,$postgreSQLControlArray,$postgreSQLScore,$postgreSQLTotalWeight = Receive-Job -Job $job
             $PostgreSQLResults += $tempPostgreSQLResults
             $PostgreSQLTotalScore += $postgreSQLScore
+            $postgreSQLControlArrayList += $postgreSQLControlArray
         }
 
         $PostgreSQLTotalAvg = $PostgreSQLTotalScore / ($postgreSQLTotalWeight * $PostgreSQLServers.Count)
@@ -2073,6 +2075,7 @@ foreach ($sub in $AllSubscriptions) {
     $CosmosDBTotalScore = 0
 
     $cosmosDBJobs = @()
+    $cosmosDBControlArrayList = @()
 
     foreach ($cosmosAcct in $CosmosDBAccounts) {
             
@@ -2294,6 +2297,7 @@ foreach ($sub in $AllSubscriptions) {
             $tempCosmosDBResults,$cosmosDBControlArray,$cosmosDBScore,$cosmosDBTotalWeight = Receive-Job -Job $job
             $CosmosDBResults += $tempCosmosDBResults
             $CosmosDBTotalScore += $cosmosDBScore
+            $cosmosDBControlArrayList += $cosmosDBControlArray
         }
 
         $CosmosDBTotalAvg = $CosmosDBTotalScore / ($cosmosDBTotalWeight * $CosmosDBAccounts.Count)
@@ -2354,6 +2358,7 @@ foreach ($sub in $AllSubscriptions) {
     $AKSTotalScore = 0
 
     $aksJobs = @()
+    $aksControlArrayList = @()
 
     foreach ($aksCluster in $AKSClusters) {
             
@@ -2599,6 +2604,7 @@ foreach ($sub in $AllSubscriptions) {
             $tempAKSResults,$aksControlArray,$aksScore,$aksTotalWeight = Receive-Job -Job $job
             $AKSResults += $tempAKSResults
             $AKSTotalScore += $aksScore
+            $aksControlArrayList += $aksControlArray
         }
 
         $AKSTotalAvg = $AKSTotalScore / ($aksTotalWeight * $AKSClusters.Count)
@@ -2646,6 +2652,7 @@ foreach ($sub in $AllSubscriptions) {
     $OpenAITotalScore = 0
 
     $openAIJobs = @()
+    $openAIControlArrayList = @()
 
     foreach ($openAIResource in $OpenAIResources) {
             
@@ -2758,6 +2765,7 @@ foreach ($sub in $AllSubscriptions) {
             $tempOpenAIResults,$openAIControlArray,$openAIScore,$openAITotalWeight = Receive-Job -Job $job
             $OpenAIResults += $tempOpenAIResults
             $OpenAITotalScore += $openAIScore
+            $openAIControlArrayList += $openAIControlArray
         }
 
         $OpenAITotalAvg = $OpenAITotalScore / ($openAITotalWeight * $OpenAIResources.Count)
@@ -2780,57 +2788,57 @@ foreach ($sub in $AllSubscriptions) {
     $allWeightedAverages = @()
 
     # Get all weighted averages for each service
-    if ($strgControlArray) {
-        $allStrgWeightedAverages = Get-AllWeightedAveragesPerService($strgControlArray)
+    if ($strgControlArrayList) {
+        $allStrgWeightedAverages = Get-AllWeightedAveragesPerService($strgControlArrayList)
         foreach ($strgWeightedAverage in $allStrgWeightedAverages) {
             $allWeightedAverages += $strgWeightedAverage
         }
     }
 
     if ($kvControlArray) {
-        $allKvWeightedAverages = Get-AllWeightedAveragesPerService($kvControlArray)
+        $allKvWeightedAverages = Get-AllWeightedAveragesPerService($kvControlArrayList)
         foreach ($kvWeightedAverage in $allKvWeightedAverages) {
             $allWeightedAverages += $kvWeightedAverage
         }
     }
 
     if ($vmControlArray) {
-        $allVmWeightedAverages = Get-AllWeightedAveragesPerService($vmControlArray)
+        $allVmWeightedAverages = Get-AllWeightedAveragesPerService($vmControlArrayList)
         foreach ($vmWeightedAverage in $allVmWeightedAverages) {
             $allWeightedAverages += $vmWeightedAverage
         }
     }
 
     if ($appServiceControlArray) {
-        $allAppServiceWeightedAverages = Get-AllWeightedAveragesPerService($appServiceControlArray)
+        $allAppServiceWeightedAverages = Get-AllWeightedAveragesPerService($appServiceControlArrayList)
         foreach ($appServiceWeightedAverage in $allAppServiceWeightedAverages) {
             $allWeightedAverages += $appServiceWeightedAverage
         }
     }
 
     if ($postgreSQLControlArray) {
-        $allPostgreSQLWeightedAverages = Get-AllWeightedAveragesPerService($postgreSQLControlArray)
+        $allPostgreSQLWeightedAverages = Get-AllWeightedAveragesPerService($postgreSQLControlArrayList)
         foreach ($postgreSQLWeightedAverage in $allPostgreSQLWeightedAverages) {
             $allWeightedAverages += $postgreSQLWeightedAverage
         }
     }
 
     if ($CosmosDBControlArray) {
-        $allCosmosDBWeightedAverages = Get-AllWeightedAveragesPerService($cosmosDBControlArray)
+        $allCosmosDBWeightedAverages = Get-AllWeightedAveragesPerService($cosmosDBControlArrayList)
         foreach ($cosmosDBWeightedAverage in $allCosmosDBWeightedAverages) {
             $allWeightedAverages += $cosmosDBWeightedAverage
         }
     }
 
     if ($AKSControlArray) {
-        $allAKSWeightedAverages = Get-AllWeightedAveragesPerService($aksControlArray)
+        $allAKSWeightedAverages = Get-AllWeightedAveragesPerService($aksControlArrayList)
         foreach ($aksWeightedAverage in $allAKSWeightedAverages) {
             $allWeightedAverages += $aksWeightedAverage
         }
     }
 
     if ($OpenAIControlArray) {
-        $allOpenAIWeightedAverages = Get-AllWeightedAveragesPerService($openAIControlArray)
+        $allOpenAIWeightedAverages = Get-AllWeightedAveragesPerService($openAIControlArrayList)
         foreach ($openAIWeightedAverage in $allOpenAIWeightedAverages) {
             $allWeightedAverages += $openAIWeightedAverage
         }
