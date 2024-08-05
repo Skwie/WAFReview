@@ -1137,9 +1137,9 @@ foreach ($sub in $AllSubscriptions) {
             $tempAppServiceResults = @()
             $tempSkippedAppServices = 0
 
-            $appDetails = az webapp show --name $appservice.name --resource-group $appservice.resourceGroup | ConvertFrom-Json -Depth 10
+            $appDetails = az webapp show --name $appservice.name --resource-group $appservice.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
             if (!$appDetails) {
-                $skippedAppServices += 1
+                $tempSkippedAppServices += 1
                 $tempAppServiceResults += ""
                 $tempAppServiceResults += "Unable to retrieve app details for App Service $($appservice.name). This is most likely due to insufficient permissions. Skipping..."
                 $tempAppServiceResults += ""
