@@ -1138,14 +1138,16 @@ foreach ($sub in $AllSubscriptions) {
             $tempSkippedAppServices = 0
 
             $appDetails = az webapp show --name $appservice.name --resource-group $appservice.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+            $appServiceControlArray = @()
+
             if (!$appDetails) {
                 $tempSkippedAppServices += 1
-                Write-Output "Unable to retrieve app details for App Service $($appservice.name). This is most likely due to insufficient permissions. Skipping..."
-                $tempSkippedAppServices
+                Write-Host "Unable to retrieve app details for App Service $($appservice.name). This is most likely due to insufficient permissions. Skipping..."
+                $appServiceScore = 0
+                $appServiceTotalWeight = 0
+                $tempAppServiceResults,$appServiceControlArray,$appServiceScore,$appServiceTotalWeight,$tempSkippedAppServices
             }
             else {
-                $appServiceControlArray = @()
-
                 foreach ($control in $using:AppServiceControls) {
                     $appServiceCheck = $control.Split(';')
                     $appServiceCheckName = $appServiceCheck[0]
