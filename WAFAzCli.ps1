@@ -451,7 +451,7 @@ foreach ($sub in $AllSubscriptions) {
             $roundedStorageAvg = [math]::Round($storageAvgScore, 1)
 
             $tempStorageResults += ""
-            $tempStorageResults += "Storage Account $($strg.name) has an average score of $roundedStorageAvg %."
+            $tempStorageResults += "Azure Resource - Storage Account $($strg.name) has an average score of $roundedStorageAvg %."
         
             $tempStorageResults,$strgControlArray,$storageScore,$strgTotalWeight
         }
@@ -656,7 +656,7 @@ foreach ($sub in $AllSubscriptions) {
             $roundedKvAvg = [math]::Round($kvAvgScore, 1)
 
             $tempVaultResults += ""
-            $tempVaultResults += "Key Vault $($keyvault.name) has an average score of $roundedKvAvg %."
+            $tempVaultResults += "Azure Resource - Key Vault $($keyvault.name) has an average score of $roundedKvAvg %."
 
             $tempVaultResults,$kvControlArray,$kvScore,$kvTotalWeight
         }
@@ -1048,7 +1048,7 @@ foreach ($sub in $AllSubscriptions) {
             $roundedVmAvg = [math]::Round($vmAvgScore, 1)
 
             $tempVMResults += ""
-            $tempVMResults += "Virtual Machine $($vm.name) has an average score of $roundedVmAvg %."
+            $tempVMResults += "Azure Resource - Virtual Machine $($vm.name) has an average score of $roundedVmAvg %."
 
             $tempVMResults,$vmControlArray,$vmScore,$vmTotalWeight
         }
@@ -1531,7 +1531,7 @@ foreach ($sub in $AllSubscriptions) {
                 $roundedAppServiceAvg = [math]::Round($appServiceAvgScore, 1)
     
                 $tempAppServiceResults += ""
-                $tempAppServiceResults += "App Service $($appservice.name) has an average score of $roundedAppServiceAvg %."
+                $tempAppServiceResults += "Azure Resource - App Service $($appservice.name) has an average score of $roundedAppServiceAvg %."
     
                 $tempAppServiceResults,$appServiceControlArray,$appServiceScore,$appServiceTotalWeight,$tempSkippedAppServices
             }
@@ -2015,7 +2015,7 @@ foreach ($sub in $AllSubscriptions) {
             $roundedPostgreSQLAvg = [math]::Round($postgreSQLAvgScore, 1)
 
             $tempPostgreSQLResults += ""
-            $tempPostgreSQLResults += "PostgreSQL server $($server.name) has an average score of $roundedPostgreSQLAvg %."
+            $tempPostgreSQLResults += "Azure Resource - PostgreSQL server $($server.name) has an average score of $roundedPostgreSQLAvg %."
 
             $tempPostgreSQLResults,$postgreSQLControlArray,$postgreSQLScore,$postgreSQLTotalWeight
         }
@@ -2290,7 +2290,7 @@ foreach ($sub in $AllSubscriptions) {
             $roundedCosmosDBAvg = [math]::Round($cosmosDBAvgScore, 1)
 
             $tempCosmosDBResults += ""
-            $tempCosmosDBResults += "CosmosDB account $($cosmosAcct.name) has an average score of $roundedCosmosDBAvg %."
+            $tempCosmosDBResults += "Azure Resource - CosmosDB account $($cosmosAcct.name) has an average score of $roundedCosmosDBAvg %."
 
             $tempCosmosDBResults,$cosmosDBControlArray,$cosmosDBScore,$cosmosDBTotalWeight
         }
@@ -2597,7 +2597,7 @@ foreach ($sub in $AllSubscriptions) {
             $roundedAKSAvg = [math]::Round($aksAvgScore, 1)
 
             $tempAKSResults += ""
-            $tempAKSResults += "AKS cluster $($aksCluster.name) has an average score of $roundedAKSAvg %."
+            $tempAKSResults += "Azure Resource - AKS cluster $($aksCluster.name) has an average score of $roundedAKSAvg %."
 
             $tempAKSResults,$aksControlArray,$aksScore,$aksTotalWeight
         }
@@ -2758,7 +2758,7 @@ foreach ($sub in $AllSubscriptions) {
             $roundedOpenAIAvg = [math]::Round($openAIAvgScore, 1)
 
             $tempOpenAIResults += ""
-            $tempOpenAIResults += "Azure OpenAI resource $($openAIResource.name) has an average score of $roundedOpenAIAvg %."
+            $tempOpenAIResults += "Azure Resource - Azure OpenAI instance $($openAIResource.name) has an average score of $roundedOpenAIAvg %."
 
             $tempOpenAIResults,$openAIControlArray,$openAIScore,$openAITotalWeight
         }
