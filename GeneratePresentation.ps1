@@ -167,10 +167,39 @@ $newSlide.Shapes[2].Top -= 150
 ####################### Edit result slide #############################################
 
 $startIndex = 9
-$chunkSize = 23
+$chunkSize = 22
+$service = "Storage Account"
 
   # Margin size in points
 for ($i = $startIndex; $i -lt $csvContent.Count; $i += $chunkSize) {
+    
+    # Check if the next service is of the same type, otherwise modify chunk size
+    if ($csvContent[$i+1] -match "WAF Assessment Results for") {
+        $service = $csvContent[$i+1].Split("Results for ")[1]
+        $i += 4
+        Switch($service){
+            "Storage Account" { $chunkSize = 22 }
+            "Key Vaults" { $chunkSize = 14 }
+            "Virtual Machines" { $chunkSize = 23 }
+            "App Services" { $chunkSize = 33 }
+            "PostgreSQL" { $chunkSize = 22 }
+            "CosmosDB" { $chunkSize = 15 }
+            "AKS" { $chunkSize = 22 }
+            "Azure OpenAI" { $chunkSize = 9 }
+        }
+    }
+    elseif ($csvContent[$i+1] -match "Summary of results") {
+        Break
+    }
+    if ($csvContent[$i+1] -match "resources found for subscription") {
+        $chunkSize = 4
+        Continue
+    }
+    elseif ($csvContent[$i] -match "resources found for subscription") {
+        $chunkSize = 3
+        Continue
+    }
+
     # Get the next chunk of lines
     $chunk = $csvContent[$i..($i + $chunkSize - 1)]
     $chunk = $chunk.Replace('"', '')

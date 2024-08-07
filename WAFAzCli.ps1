@@ -2931,7 +2931,13 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     if ($GeneratePowerPoint) {
-        .\GeneratePresentation.ps1 -AssessmentReport ".\results\$($sub.name).txt"
+        if ($OutputToFile) {
+            .\GeneratePresentation.ps1 -AssessmentReport ".\results\$($sub.name).txt"
+        }
+        else {
+            Write-Output "Could not generate PowerPoint presentation as results are not saved to a file."
+
+        }
     }
 
     Write-Output $WAFResults
