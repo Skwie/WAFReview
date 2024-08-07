@@ -15,7 +15,10 @@
 .PARAMETER <OutputToFile>
   Optional. If OutputToFile is true, the script will output the results to a file in the results folder.
   If the script runs for many subscriptions at once, it is recommended to set this to true, as the output will be too large to read in the terminal.
-    
+
+.PARAMETER <GeneratePowerPoint>
+  Optional. If GeneratePowerPoint is true, the script will generate a PowerPoint presentation based on the results of the assessment.  
+
 .OUTPUTS
   The script progressively writes results to the terminal. After performing all checks it should also output a file per subscription listing all controls and scores.
   Possible ToDo is to make the file output compatible with the Microsoft powerpoint generation script.
@@ -24,7 +27,7 @@
   Version:        0.8.2
   Author:         Jordy Groenewoud
   Creation Date:  27/03/2024
-  Last Updated:   15/07/2024
+  Last Updated:   07/08/2024
   
 .EXAMPLE
   .\WAFAzCli.ps1 -Filter "-p-lz" -OutputToFile $False

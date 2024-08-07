@@ -31,10 +31,14 @@ You can use the -Filter param to limit the subscription filter to those matching
 
 3. If you wish the results to be written to a file, set the OutputToFile boolean to $true.
 
+4. If you want to generate a Powerpoint presentation, set the GeneratePowerPoint boolean to $true.
+If you get permission errors, manually open the WAF_PowerPointReport_Template, select a label (public), and save it to enable editing.
+Note that outputting results to file is necessary to generate a presentation.
+
 ### Features
 
 - **Assessment**: The script performs an automated assessment of adherence to the Azure WAF for Azure resources.
-- **Reporting**: After the assessment is completed, the script generates a detailed report in txt format, providing an overview of the findings and recommendations for improving your WAF posture.
+- **Reporting**: After the assessment is completed, the script generates a detailed report in txt format, providing an overview of the findings and recommendations for improving your WAF posture. Powerpoint generation is also supported.
 
 ### Examples
 
@@ -45,3 +49,6 @@ To run the assessment for all subscriptions and not generate a report, use the f
 To run the assessment for all subscriptions matching a string, use the following command:
 
   .\WAFAzCli.ps1 -Filter '-p-lz'
+
+To generate a Powerpoint report, use both the OutputToFile and GeneratePowerPoint booleans:
+  .\WAFAzCli.ps1 -Filter 'aec-p-lz' -OutputToFile $true -GeneratePowerPoint $true
