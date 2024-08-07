@@ -43,7 +43,10 @@ param
     $Filter,
 
     [Parameter(Mandatory=$false)]
-    $OutputToFile = $true
+    $OutputToFile = $true,
+
+    [Parameter(Mandatory=$false)]
+    $GeneratePowerPoint = $false
 )
 
 ################# Region Functions #################
@@ -2922,6 +2925,10 @@ foreach ($sub in $AllSubscriptions) {
     
     if ($OutputToFile) {
         $WAFResults | Out-File -FilePath ( New-Item -Path ".\results\$($sub.name).txt" -Force )
+    }
+
+    if ($GeneratePowerPoint) {
+        .\GeneratePresentation.ps1 -AssessmentReport ".\results\$($sub.name).txt"
     }
 
     Write-Output $WAFResults
