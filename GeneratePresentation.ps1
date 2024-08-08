@@ -187,11 +187,11 @@ for ($i = $startIndex; $i -lt $csvContent.Count; $i += $chunkSize) {
     elseif ($csvContent[$i+1] -match "Summary of results") {
         Break
     }
-    elseif ($csvContent[$i+1] -match "resources found for subscription") {
+    elseif ($csvContent[$i+1] -match "found for subscription") {
         $chunkSize = 4
         Continue
     }
-    elseif ($csvContent[$i] -match "resources found for subscription") {
+    elseif ($csvContent[$i] -match "found for subscription") {
         $chunkSize = 3
         Continue
     }
