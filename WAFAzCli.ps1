@@ -2789,6 +2789,432 @@ foreach ($sub in $AllSubscriptions) {
 
     # End region
 
+    ################# Region SQL Database ####################
+
+    Write-Output "Checking SQL Databases for subscription $($sub.name)..."
+    $SQLDatabases = @()
+    $SQLServers = @()
+
+    $SQLServers += az sql server list 2> $null | ConvertFrom-Json -Depth 10
+    if (!$?) {
+        Write-Error "Unable to retrieve SQL Servers for subscription $($sub.name)." -
+        ErrorAction Continue
+    }
+
+    foreach ($sqlServer in $SQLServers) {
+        $SQLDatabases += az sql db list --server $sqlServer.name --resource-group $sqlServer.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+        if (!$?) {
+            Write-Error "Unable to retrieve SQL Databases for SQL Server $($sqlServer.name)." -
+            ErrorAction Continue
+        }
+    }
+
+    # Define controls for SQL Database
+    $SqlDbControls = @(
+        "Use active geo-replication to create a readable secondary database in another region;Reliability;80"
+        "Use auto-failover groups to enable automatic failover of a group of databases;Reliability;80"
+        "Use a zone-redundant configuration to maximize resilience within an Azure region;Reliability;80"
+        "Monitor your SQL database in near-real time with Azure Monitor;Operational Excellence;80"
+        "Review the minimum TLS version for your SQL Database;Security;90"
+        "Design application access around Always Encrypted;Security;90"
+        "Use a private endpoint to connect to your SQL Database;Security;90"
+        "Disable public network access to your SQL Database;Security;90"
+        "Use Advanced Threat Protection for your SQL Database;Security;90"
+        "Track database events with Azure SQL Database Auditing;Security;80"
+        "Configure a user-assigned managed identity for your SQL Database;Security;80"
+        "Disable SQL-based authentication for your SQL Database;Security;90"
+    )
+
+    $SQLDbResults = @()
+    $SQLDbResults += ""
+    $SQLDbResults += "#######################################"
+    $SQLDbResults += "WAF Assessment Results for SQL Database"
+    $SQLDbResults += "#######################################"
+
+    $SQLDbTotalAvg = 0
+    $SQLDbTotalScore = 0
+
+    $sqlDbJobs = @()
+    $sqlDbControlArrayList = @()
+
+    foreach ($sqlDb in $SQLDatabases) {
+            
+        Write-Output "Checking SQL Database $($sqlDb.name)..."
+
+        $sqlDbJobs += Start-Threadjob -ScriptBlock {
+            
+            $sqlDb = $using:sqlDb
+            $tempSQLDbResults = @()
+
+            $sqlDbControlArray = @()
+
+            foreach ($control in $using:SqlDbControls) {
+                $sqlDbCheck = $control.Split(';')
+                $sqlDbCheckName = $sqlDbCheck[0]
+                $sqlDbCheckPillars = $sqlDbCheck[1].Split(',')
+                $sqlDbCheckWeight = $sqlDbCheck[2]
+        
+                $sqlDbControlArray += [PSCustomObject]@{
+                    Name = $sqlDbCheckName
+                    Pillars = $sqlDbCheckPillars
+                    Weight = $sqlDbCheckWeight
+                    Result = $null
+                }
+            }
+
+            # Calculate total weight to calculate weighted average
+            $sqlDbTotalWeight = 0
+            foreach ($control in $sqlDbControlArray) {
+                $sqlDbTotalWeight += $control.Weight
+            }
+
+            $tempSQLDbResults += ""
+            $tempSQLDbResults += "----- SQL Database - $($sqlDb.name) -----"
+            $tempSQLDbResults += ""
+
+            # Use active geo-replication to create a readable secondary database in another region
+            if ($sqlDb.readScale -match "Enabled") {
+                $tempSQLDbResults += "Good: Active geo-replication is used to create a readable secondary database in another region for SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[0].Result = 100
+            }
+            else {
+                $tempSQLDbResults += "Bad: Active geo-replication is NOT used to create a readable secondary database in another region for SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[0].Result = 0
+            }
+
+            # Use auto-failover groups to enable automatic failover of a group of databases
+            if ($sqlDb.failoverGroupId) {
+                $tempSQLDbResults += "Good: Auto-failover groups are used to enable automatic failover of a group of databases for SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[1].Result = 100
+            }
+            else {
+                $tempSQLDbResults += "Bad: Auto-failover groups are NOT used to enable automatic failover of a group of databases for SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[1].Result = 0
+            }
+
+            # Use a zone-redundant configuration to maximize resilience within an Azure region
+            if ($sqlDb.zoneRedundant -match "True") {
+                $tempSQLDbResults += "Good: Zone-redundant configuration is used to maximize resilience within an Azure region for SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[2].Result = 100
+            }
+            else {
+                $tempSQLDbResults += "Bad: Zone-redundant configuration is NOT used to maximize resilience within an Azure region for SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[2].Result = 0
+            } 
+
+            # Monitor your SQL database in near-real time with Azure Monitor
+            $sqlDbMonitoring = az monitor diagnostic-settings list --resource $sqlDb.id 2> $null | ConvertFrom-Json -Depth 10
+            if ($sqlDbMonitoring.type -match "Microsoft.Insights/diagnosticSettings") {
+                $tempSQLDbResults += "Good: SQL database is monitored in near-real time with Azure Monitor for SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[3].Result = 100
+            }
+            else {
+                $tempSQLDbResults += "Bad: SQL database is NOT monitored in near-real time with Azure Monitor for SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[3].Result = 0
+            }
+
+            # Review the minimum TLS version for your SQL Database
+            $srv = az sql server show --ids $sqlDb.managedBy 2> $null | ConvertFrom-Json -Depth 10
+            if ($srv.minTlsVersion -match "1.2") {
+                $tempSQLDbResults += "Good: Minimum TLS version for SQL Database $($sqlDb.name) is 1.2"
+                $sqlDbControlArray[4].Result = 100
+            }
+            else {
+                $tempSQLDbResults += "Bad: Minimum TLS version for SQL Database $($sqlDb.name) is NOT 1.2"
+                $sqlDbControlArray[4].Result = 0
+            }
+
+            # Design application access around Always Encrypted
+            if ($sqlDb.encryptionProtector.type -match "AzureKeyVault") {
+                $tempSQLDbResults += "Good: Application access is designed around Always Encrypted for SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[5].Result = 100
+            }
+            else {
+                $tempSQLDbResults += "Bad: Application access is NOT designed around Always Encrypted for SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[5].Result = 0
+            }
+
+            # Use a private endpoint to connect to your SQL Database
+            $privateEndpoint = az network private-endpoint-connection list --id $sqlDb.id 2> $null | ConvertFrom-Json -Depth 10
+            if ($privateEndpoint) {
+                $tempSQLDbResults += "Good: Private endpoint is used to connect to SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[6].Result = 100
+            }
+            else {
+                $tempSQLDbResults += "Bad: Private endpoint is NOT used to connect to SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[6].Result = 0
+            }
+
+            # Disable public network access to your SQL Database
+            if ($srv.publicNetworkAccess -match "Disabled") {
+                $tempSQLDbResults += "Good: Public network access is disabled for SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[7].Result = 100
+            }
+            else {
+                $tempSQLDbResults += "Bad: Public network access is NOT disabled for SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[7].Result = 0
+            }
+
+            # Use Advanced Threat Protection for your SQL Database
+            $atp = az sql db advanced-threat-protection-setting show --ids $sqlDb.id 2> $null | ConvertFrom-Json -Depth 10
+            if ($atp.state -match "Enabled") {
+                $tempSQLDbResults += "Good: Advanced Threat Protection is used for SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[8].Result = 100
+            }
+            else {
+                $tempSQLDbResults += "Bad: Advanced Threat Protection is NOT used for SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[8].Result = 0
+            }
+
+            # Track database events with Azure SQL Database Auditing
+            $auditing = az sql db audit-policy show --ids $sqlDb.id 2> $null | ConvertFrom-Json -Depth 10
+            if ($auditing.state -match "Enabled") {
+                $tempSQLDbResults += "Good: Database events are tracked with Azure SQL Database Auditing for SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[9].Result = 100
+            }
+            else {
+                $tempSQLDbResults += "Bad: Database events are NOT tracked with Azure SQL Database Auditing for SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[9].Result = 0
+            }
+
+            # Configure a user-assigned managed identity for your SQL Database
+            if ($sqlDb.identity.type -match "UserAssigned") {
+                $tempSQLDbResults += "Good: User-assigned managed identity is configured for SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[10].Result = 100
+            }
+            else {
+                $tempSQLDbResults += "Bad: User-assigned managed identity is NOT configured for SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[10].Result = 0
+            }
+
+            # Disable SQL-based authentication for your SQL Database
+            foreach ($admin in $srv.administrators) {
+                $sqlDbControlArray[11].Result = 100
+                if ($admin.azureAdOnlyAuthentication -match "False") {
+                    $tempSQLDbResults += "Bad: SQL-based authentication is enabled for SQL Database $($sqlDb.name)"
+                    $sqlDbControlArray[11].Result = 0
+                    break
+                }
+            }
+            if ($sqlDbControlArray.Result -eq 100) {
+                $tempSQLDbResults += "Good: SQL-based authentication is disabled for SQL Database $($sqlDb.name)"
+            }
+
+            # Calculate the weighted average for the SQL Database
+            $sqlDbScore = $sqlDbControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
+            $sqlDbAvgScore = $sqlDbScore / $sqlDbTotalWeight
+            $roundedSQLDbAvg = [math]::Round($sqlDbAvgScore, 1)
+
+            $tempSQLDbResults += ""
+            $tempSQLDbResults += "SQL Database - $($sqlDb.name) has an average score of $roundedSQLDbAvg %."
+
+            $tempSQLDbResults,$sqlDbControlArray,$sqlDbScore,$sqlDbTotalWeight
+        }
+    }
+
+    if ($SQLDatabases.Count -gt 0) {
+        Write-Output "Waiting for SQL Database checks to complete..."
+
+        foreach ($job in ($sqlDbJobs | Wait-Job)) {
+            $tempSQLDbResults,$sqlDbControlArray,$sqlDbScore,$sqlDbTotalWeight = Receive-Job -Job $job
+            $SQLDbResults += $tempSQLDbResults
+            $SQLDbTotalScore += $sqlDbScore
+            $sqlDbControlArrayList += $sqlDbControlArray
+        }
+
+        $SQLDbTotalAvg = $SQLDbTotalScore / ($sqlDbTotalWeight * $SQLDatabases.Count)
+        $roundedSQLDbTotalAvg = [math]::Round($SQLDbTotalAvg, 1)
+
+        $lateReport += "Total average score for all SQL Databases in subscription $($sub.name) is $roundedSQLDbTotalAvg %."
+    }
+    else {
+        $SQLDbResults += ""
+        $SQLDbResults += "No SQL Databases found for subscription $($sub.name)."
+        $SQLDbResults += ""
+    }
+
+    $WAFResults += $SQLDbResults
+
+    # End region
+
+    ################# Region SQL Managed Instance ####################
+
+    Write-Output "Checking SQL Managed Instances for subscription $($sub.name)..."
+    $SQLManagedInstances = @()
+
+    $SQLManagedInstances += az sql mi list 2> $null | ConvertFrom-Json -Depth 10
+    if (!$?) {
+        Write-Error "Unable to retrieve SQL Managed Instances for subscription $($sub.name)." -
+        ErrorAction Continue
+    }
+
+    # Define controls for SQL Managed Instance
+    $SqlMiControls = @(
+        "Use the Business-Critical tier for production workloads;Reliability;80"
+        "Use a zone-redundant configuration to maximize resilience within an Azure region;Reliability;80"
+        "Monitor your SQL managed instance in near-real time with Azure Monitor;Operational Excellence;80"
+        "Review the minimum TLS version for your SQL Managed Instance;Security;90"
+        "Disable public network access to your SQL Managed Instance;Security;90"
+        "Use Advanced Threat Protection for your SQL Managed Instance;Security;90"
+        "Disable SQL-based authentication for your SQL Managed Instance;Security;90"
+    )
+
+    $SQLMiResults = @()
+    $SQLMiResults += ""
+    $SQLMiResults += "###############################################"
+    $SQLMiResults += "WAF Assessment Results for SQL Managed Instance"
+    $SQLMiResults += "###############################################"
+
+    $SQLMiTotalAvg = 0
+    $SQLMiTotalScore = 0
+
+    $sqlMiJobs = @()
+    $sqlMiControlArrayList = @()
+
+    foreach ($sqlMi in $SQLManagedInstances) {
+            
+        Write-Output "Checking SQL Managed Instance $($sqlMi.name)..."
+
+        $sqlMiJobs += Start-Threadjob -ScriptBlock {
+            
+            $sqlMi = $using:sqlMi
+            $tempSQLMiResults = @()
+
+            $sqlMiControlArray = @()
+
+            foreach ($control in $using:SqlMiControls) {
+                $sqlMiCheck = $control.Split(';')
+                $sqlMiCheckName = $sqlMiCheck[0]
+                $sqlMiCheckPillars = $sqlMiCheck[1].Split(',')
+                $sqlMiCheckWeight = $sqlMiCheck[2]
+        
+                $sqlMiControlArray += [PSCustomObject]@{
+                    Name = $sqlMiCheckName
+                    Pillars = $sqlMiCheckPillars
+                    Weight = $sqlMiCheckWeight
+                    Result = $null
+                }
+            }
+
+            # Calculate total weight to calculate weighted average
+            $sqlMiTotalWeight = 0
+            foreach ($control in $sqlMiControlArray) {
+                $sqlMiTotalWeight += $control.Weight
+            }
+
+            $tempSQLMiResults += ""
+            $tempSQLMiResults += "----- SQL Managed Instance - $($sqlMi.name) -----"
+            $tempSQLMiResults += ""
+
+            # Use the Business-Critical tier for production workloads
+            if ($sqlMi.sku.tier -match "BusinessCritical") {
+                $tempSQLMiResults += "Good: Business-Critical tier is used for production workloads for SQL Managed Instance $($sqlMi.name)"
+                $sqlMiControlArray[0].Result = 100
+            }
+            else {
+                $tempSQLMiResults += "Bad: Business-Critical tier is NOT used for production workloads for SQL Managed Instance $($sqlMi.name)"
+                $sqlMiControlArray[0].Result = 0
+            }
+
+            # Use a zone-redundant configuration to maximize resilience within an Azure region
+            if ($sqlMi.zoneRedundant -match "True") {
+                $tempSQLMiResults += "Good: Zone-redundant configuration is used to maximize resilience within an Azure region for SQL Managed Instance $($sqlMi.name)"
+                $sqlMiControlArray[1].Result = 100
+            }
+            else {
+                $tempSQLMiResults += "Bad: Zone-redundant configuration is NOT used to maximize resilience within an Azure region for SQL Managed Instance $($sqlMi.name)"
+                $sqlMiControlArray[1].Result = 0
+            }
+
+            # Monitor your SQL managed instance in near-real time with Azure Monitor
+            $sqlMiMonitoring = az monitor diagnostic-settings list --resource $sqlMi.id 2> $null | ConvertFrom-Json -Depth 10
+            if ($sqlMiMonitoring.type -match "Microsoft.Insights/diagnosticSettings") {
+                $tempSQLMiResults += "Good: SQL managed instance is monitored in near-real time with Azure Monitor for SQL Managed Instance $($sqlMi.name)"
+                $sqlMiControlArray[2].Result = 100
+            }
+            else {
+                $tempSQLMiResults += "Bad: SQL managed instance is NOT monitored in near-real time with Azure Monitor for SQL Managed Instance $($sqlMi.name)"
+                $sqlMiControlArray[2].Result = 0
+            }
+
+            # Review the minimum TLS version for your SQL Managed Instance
+            if ($sqlMi.minimalTlsVersion -match "1.2") {
+                $tempSQLMiResults += "Good: Minimum TLS version for SQL Managed Instance $($sqlMi.name) is 1.2"
+                $sqlMiControlArray[3].Result = 100
+            }
+            else {
+                $tempSQLMiResults += "Bad: Minimum TLS version for SQL Managed Instance $($sqlMi.name) is NOT 1.2"
+                $sqlMiControlArray[3].Result = 0
+            }
+
+            # Disable public network access to your SQL Managed Instance
+            if ($sqlMi.publicDataEndpointEnabled -match "False") {
+                $tempSQLMiResults += "Good: Public network access is disabled for SQL Managed Instance $($sqlMi.name)"
+                $sqlMiControlArray[4].Result = 100
+            }
+            else {
+                $tempSQLMiResults += "Bad: Public network access is NOT disabled for SQL Managed Instance $($sqlMi.name)"
+                $sqlMiControlArray[4].Result = 0
+            }
+
+            # Use Advanced Threat Protection for your SQL Managed Instance
+            $atp = az sql mi advanced-threat-protection-setting show --ids $sqlMi.id 2> $null | ConvertFrom-Json -Depth 10
+            if ($atp.state -match "Enabled") {
+                $tempSQLMiResults += "Good: Advanced Threat Protection is used for SQL Managed Instance $($sqlMi.name)"
+                $sqlMiControlArray[5].Result = 100
+            }
+            else {
+                $tempSQLMiResults += "Bad: Advanced Threat Protection is NOT used for SQL Managed Instance $($sqlMi.name)"
+                $sqlMiControlArray[5].Result = 0
+            }
+
+            # Disable SQL-based authentication for your SQL Managed Instance
+            if ($sqlMi.administrators.azureAdOnlyAuthentication -match "True") {
+                $tempSQLMiResults += "Good: SQL-based authentication is disabled for SQL Managed Instance $($sqlMi.name)"
+                $sqlMiControlArray[6].Result = 100
+            }
+            else {
+                $tempSQLMiResults += "Bad: SQL-based authentication is enabled for SQL Managed Instance $($sqlMi.name)"
+                $sqlMiControlArray[6].Result = 0
+            }
+
+            # Calculate the weighted average for the SQL Managed Instance
+            $sqlMiScore = $sqlMiControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
+            $sqlMiAvgScore = $sqlMiScore / $sqlMiTotalWeight
+            $roundedSQLMiAvg = [math]::Round($sqlMiAvgScore, 1)
+
+            $tempSQLMiResults += ""
+            $tempSQLMiResults += "SQL Managed Instance - $($sqlMi.name) has an average score of $roundedSQLMiAvg %."
+
+            $tempSQLMiResults,$sqlMiControlArray,$sqlMiScore,$sqlMiTotalWeight
+        }
+    }
+    
+    if ($SQLManagedInstances.Count -gt 0) {
+        Write-Output "Waiting for SQL Managed Instance checks to complete..."
+
+        foreach ($job in ($sqlMiJobs | Wait-Job)) {
+            $tempSQLMiResults,$sqlMiControlArray,$sqlMiScore,$sqlMiTotalWeight = Receive-Job -Job $job
+            $SQLMiResults += $tempSQLMiResults
+            $SQLMiTotalScore += $sqlMiScore
+            $sqlMiControlArrayList += $sqlMiControlArray
+        }
+
+        $SQLMiTotalAvg = $SQLMiTotalScore / ($sqlMiTotalWeight * $SQLManagedInstances.Count)
+        $roundedSQLMiTotalAvg = [math]::Round($SQLMiTotalAvg, 1)
+
+        $lateReport += "Total average score for all SQL Managed Instances in subscription $($sub.name) is $roundedSQLMiTotalAvg %."
+    }
+    else {
+        $SQLMiResults += ""
+        $SQLMiResults += "No SQL Managed Instances found for subscription $($sub.name)."
+        $SQLMiResults += ""
+    }
+
+    $WAFResults += $SQLMiResults
+
+    # End region
+
     ############### Region Score by Pillars ##################
 
     $allWeightedAverages = @()
