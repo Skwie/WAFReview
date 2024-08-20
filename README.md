@@ -29,11 +29,8 @@ Note that if no subscriptionIDs are provided, the script runs for all subscripti
 If you have access to many subscriptions, the runtime of this script may be extremely long.
 You can use the -Filter param to limit the subscription filter to those matching a provided string.
 
-3. If you wish the results to be written to a file, set the OutputToFile boolean to $true.
-
-4. If you want to generate a Powerpoint presentation, set the GeneratePowerPoint boolean to $true.
+3. If you want to generate a Powerpoint presentation, set the GeneratePowerPoint boolean to $true.
 If you get permission errors, manually open the WAF_PowerPointReport_Template, select a label (public), and save it to enable editing.
-Note that outputting results to file is necessary to generate a presentation.
 
 ### Features
 
@@ -42,13 +39,9 @@ Note that outputting results to file is necessary to generate a presentation.
 
 ### Examples
 
-To run the assessment for all subscriptions and not generate a report, use the following command:
-
-  .\WAFAzCli.ps1 -OutputToFile $False
-
 To run the assessment for all subscriptions matching a string, use the following command:
 
   .\WAFAzCli.ps1 -Filter '-p-lz'
 
-To generate a Powerpoint report, use both the OutputToFile and GeneratePowerPoint booleans:
-  .\WAFAzCli.ps1 -Filter 'aec-p-lz' -OutputToFile $true -GeneratePowerPoint $true
+To generate a Powerpoint report, use the GeneratePowerPoint boolean:
+  .\WAFAzCli.ps1 -Filter 'aec-p-lz' -GeneratePowerPoint $true
