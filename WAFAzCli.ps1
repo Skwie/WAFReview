@@ -96,6 +96,8 @@ function Get-AllWeightedAveragesPerService($controlArray) {
 
 ################# Region Setup #####################
 
+$Error.Clear()
+
 if (!$azsession) {
     try {
         $azsession = az login
@@ -3394,7 +3396,9 @@ foreach ($sub in $AllSubscriptions) {
 
     Write-Output "Results may be truncated if they do not fit in the terminal. For full results, please check the output file."
 
-    $Error > ".\results\errors.txt"
+    if ($Error) {
+        $Error > ".\results\errors.txt"
+    }
 
     # End region
 
