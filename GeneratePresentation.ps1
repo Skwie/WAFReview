@@ -228,7 +228,7 @@ Clear-Presentation -Slide $slides.Detail
 $reportTemplateObject.Slides[$reportTemplateObject.Slides.Count].Delete()
 
 #Save presentation and close object
-$reportTemplateObject.SavecopyAs(“$workingDirectory\Azure Well-Architected $AssessmentType Review - Executive Summary - $reportDate.pptx”)
+$reportTemplateObject.SavecopyAs(“$workingDirectory\results\Azure Well-Architected $AssessmentType Review - Executive Summary - $reportDate.pptx”)
 $reportTemplateObject.Close()
 
 $application.quit()
