@@ -2895,7 +2895,7 @@ foreach ($sub in $AllSubscriptions) {
                 $sqlDbTotalWeight += $control.Weight
             }
 
-            $srv = az sql server show --ids $sqlDb.managedBy 2> $null | ConvertFrom-Json -Depth 10
+            $srv = az sql server show --ids $sqlDb.id.Split("/databases/")[0] 2> $null | ConvertFrom-Json -Depth 10
 
             $tempSQLDbResults += ""
             $tempSQLDbResults += "----- SQL Database - $($srv.name) / $($sqlDb.name) -----"
