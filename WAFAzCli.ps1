@@ -180,7 +180,7 @@ foreach ($sub in $AllSubscriptions) {
         "Use lifecycle policy to move data between access tiers;Cost Optimization;60"
         "Configure Minimum TLS Version;Custom;95"
         "Enable Infrastructure Encryption;Custom;85"
-        "Private Endpoint in Use;Custom;75"
+        "Private Endpoint in Use;Custom;100"
         "Storage Account Encryption using Customer Managed Keys;Custom;50"
     )
 
@@ -497,6 +497,7 @@ foreach ($sub in $AllSubscriptions) {
         "Soft Delete should be enabled for Azure Key Vault;Custom;75"
         "Allow trusted Microsoft services to access the Key Vault;Custom;60"
         "Restrict Default Network Access for Azure Key Vaults;Custom;80"
+        "Private Endpoint in Use;Custom;100"
     )
 
     $VaultResults = @()
@@ -644,6 +645,16 @@ foreach ($sub in $AllSubscriptions) {
             else {
                 $tempVaultResults += "Bad: Network access is NOT denied by default for $($keyvault.name)"
                 $kvControlArray[8].Result = 0
+            }
+
+            # Private Endpoint in Use
+            if ($vaultsettings.properties.privateEndpointConnections) {
+                $tempVaultResults += "Good: A Private Endpoint is attached to keyvault $($keyvault.name)."
+                $kvControlArray[9].Result = 100
+            }
+            else {
+                $tempVaultResults += "Bad: No Private Endpoint is attached to keyvault $($keyvault.name)."
+                $kvControlArray[9].Result = 0
             }
 
             # Calculate the weighted average for the key vault
@@ -1114,6 +1125,7 @@ foreach ($sub in $AllSubscriptions) {
         "Enable App Service Authentication;Custom;80"
         "Enable HTTPS-only traffic;Custom;80"
         "Enable registration with Microsoft Entra ID;Custom;80"
+        "Private Endpoint in Use;Custom;100"
     )
 
     $AppServiceResults = @()
@@ -2870,8 +2882,10 @@ foreach ($sub in $AllSubscriptions) {
                 $sqlDbTotalWeight += $control.Weight
             }
 
+            $srv = az sql server show --ids $sqlDb.managedBy 2> $null | ConvertFrom-Json -Depth 10
+
             $tempSQLDbResults += ""
-            $tempSQLDbResults += "----- SQL Database - $($sqlServer.name)/$($sqlDb.name) -----"
+            $tempSQLDbResults += "----- SQL Database - $($srv.name) / $($sqlDb.name) -----"
             $tempSQLDbResults += ""
 
             # Use active geo-replication to create a readable secondary database in another region
@@ -2916,7 +2930,6 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Review the minimum TLS version for your SQL Database
-            $srv = az sql server show --ids $sqlDb.managedBy 2> $null | ConvertFrom-Json -Depth 10
             if ($srv.minimalTlsVersion -match "1.2") {
                 $tempSQLDbResults += "Good: Minimum TLS version for SQL Database $($sqlDb.name) is 1.2"
                 $sqlDbControlArray[4].Result = 100
@@ -3366,7 +3379,7 @@ foreach ($sub in $AllSubscriptions) {
 
     ################# Region Outputs #####################
 
-    # This script currently writes results to the terminal, and optionally creates a txt log file in the results folder
+    # This script currently writes results to the terminal, creates a txt log file in the results folder, and optionally generates a PowerPoint presentation
     
     if (!(Test-Path ".\results")) {
         New-Item -Path ".\results" -ItemType Directory
