@@ -1534,6 +1534,17 @@ foreach ($sub in $AllSubscriptions) {
                     $tempAppServiceResults += "Bad: Registration with Microsoft Entra ID is NOT enabled for App Service $($appservice.name)"
                     $appServiceControlArray[27].Result = 0
                 }
+
+                # Private Endpoint in Use
+                $privateEndpoint = az network private-endpoint-connection list --name $appService.name --resource-group $appService.resourceGroup --type 'Microsoft.Web/Sites' 2> $null | ConvertFrom-Json -Depth 10
+                if ($privateEndpoint) {
+                    $tempAppServiceResults += "Good: Private Endpoint is in use for App Service $($appservice.name)"
+                    $appServiceControlArray[28].Result = 100
+                }
+                else {
+                    $tempAppServiceResults += "Bad: Private Endpoint is NOT in use for App Service $($appservice.name)"
+                    $appServiceControlArray[28].Result = 0
+                }
     
                 # Calculate the weighted average for the app service
                 $appServiceScore = $appServiceControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
