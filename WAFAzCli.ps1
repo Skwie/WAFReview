@@ -1888,7 +1888,7 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match 'flexible') {
-                $connectionThrottling = az postgres flexible-server parameter show --name $server.name --resource-group $server.resourceGroup --config-name connection_throttle.enable
+                $connectionThrottling = az postgres flexible-server parameter show --server-name $server.name --resource-group $server.resourceGroup --name connection_throttle.enable
                 if ($connectionThrottling.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'CONNECTION_THROTTLING' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[10].Result = 100
@@ -1912,7 +1912,7 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match 'flexible') {
-                $logCheckpoints = az postgres flexible-server parameter show --name $server.name --resource-group $server.resourceGroup --config-name log_checkpoints
+                $logCheckpoints = az postgres flexible-server parameter show --server-name $server.name --resource-group $server.resourceGroup --name log_checkpoints
                 if ($logCheckpoints.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'LOG_CHECKPOINTS' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[11].Result = 100
@@ -1936,7 +1936,7 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match 'flexible') {
-                $logConnections = az postgres flexible-server parameter show --name $server.name --resource-group $server.resourceGroup --config-name log_connections
+                $logConnections = az postgres flexible-server parameter show --server-name $server.name --resource-group $server.resourceGroup --name log_connections
                 if ($logConnections.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'LOG_CONNECTIONS' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[12].Result = 100
@@ -1960,7 +1960,7 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match 'flexible') {
-                $logDisconnections = az postgres flexible-server parameter show --name $server.name --resource-group $server.resourceGroup --config-name log_disconnections
+                $logDisconnections = az postgres flexible-server parameter show --server-name $server.name --resource-group $server.resourceGroup --name log_disconnections
                 if ($logDisconnections.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'LOG_DISCONNECTIONS' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[13].Result = 100
@@ -1984,7 +1984,7 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match 'flexible') {
-                $logDuration = az postgres flexible-server parameter show --name $server.name --resource-group $server.resourceGroup --config-name log_duration
+                $logDuration = az postgres flexible-server parameter show --server-name $server.name --resource-group $server.resourceGroup --name log_duration
                 if ($logDuration.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'LOG_DURATION' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[14].Result = 100
