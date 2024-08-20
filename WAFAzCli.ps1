@@ -3375,6 +3375,9 @@ foreach ($sub in $AllSubscriptions) {
     # This script currently writes results to the terminal, and optionally creates a txt log file in the results folder
     
     if ($OutputToFile) {
+        if (!(Test-Path ".\results")) {
+            New-Item -Path ".\results" -ItemType Directory
+        }
         $WAFResults | Out-File -FilePath ( New-Item -Path ".\results\$($sub.name).txt" -Force )
     }
 
