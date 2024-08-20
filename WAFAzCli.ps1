@@ -12,26 +12,22 @@
 .PARAMETER <Filter>
   Optional. If a string is entered here, the script will only evaluate subscriptions where the name matches the given string. Note that this param is not evaluated if the SubscriptionIds param is filled.
 
-.PARAMETER <OutputToFile>
-  Optional. If OutputToFile is true, the script will output the results to a file in the results folder.
-  If the script runs for many subscriptions at once, it is recommended to set this to true, as the output will be too large to read in the terminal.
-
 .PARAMETER <GeneratePowerPoint>
   Optional. If GeneratePowerPoint is true, the script will generate a PowerPoint presentation based on the results of the assessment.  
 
 .OUTPUTS
   The script progressively writes results to the terminal. After performing all checks it should also output a file per subscription listing all controls and scores.
-  Possible ToDo is to make the file output compatible with the Microsoft powerpoint generation script.
+  The script optionally also outputs a PowerPoint presentation with the results of the assessment.
 
 .NOTES
   Version:        0.8.2
   Author:         Jordy Groenewoud
   Creation Date:  27/03/2024
-  Last Updated:   07/08/2024
+  Last Updated:   20/08/2024
   
 .EXAMPLE
-  .\WAFAzCli.ps1 -Filter "-p-lz" -OutputToFile $False
-  .\WAFAzCli.ps1 -SubscriptionIds @('b6307584-2248-4e8b-a911-2d7f1bd2613a', 'c405e642-15db-4786-9426-1e23c84d225a') -OutputToFile $True
+  .\WAFAzCli.ps1 -Filter "-p-lz"
+  .\WAFAzCli.ps1 -SubscriptionIds @('b6307584-2248-4e8b-a911-2d7f1bd2613a', 'c405e642-15db-4786-9426-1e23c84d225a') -GeneratePowerPoint $True
 
 #>
 
@@ -2805,15 +2801,13 @@ foreach ($sub in $AllSubscriptions) {
 
     $SQLServers += az sql server list 2> $null | ConvertFrom-Json -Depth 10
     if (!$?) {
-        Write-Error "Unable to retrieve SQL Servers for subscription $($sub.name)." -
-        ErrorAction Continue
+        Write-Error "Unable to retrieve SQL Servers for subscription $($sub.name)." -ErrorAction Continue
     }
 
     foreach ($sqlServer in $SQLServers) {
         $SQLDatabases += az sql db list --server $sqlServer.name --resource-group $sqlServer.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
         if (!$?) {
-            Write-Error "Unable to retrieve SQL Databases for SQL Server $($sqlServer.name)." -
-            ErrorAction Continue
+            Write-Error "Unable to retrieve SQL Databases for SQL Server $($sqlServer.name)." -ErrorAction Continue
         }
     }
 
@@ -2877,7 +2871,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             $tempSQLDbResults += ""
-            $tempSQLDbResults += "----- SQL Database - $($sqlDb.name) -----"
+            $tempSQLDbResults += "----- SQL Database - $($sqlServer.name)/$($sqlDb.name) -----"
             $tempSQLDbResults += ""
 
             # Use active geo-replication to create a readable secondary database in another region
@@ -3374,21 +3368,13 @@ foreach ($sub in $AllSubscriptions) {
 
     # This script currently writes results to the terminal, and optionally creates a txt log file in the results folder
     
-    if ($OutputToFile) {
-        if (!(Test-Path ".\results")) {
-            New-Item -Path ".\results" -ItemType Directory
-        }
-        $WAFResults | Out-File -FilePath ( New-Item -Path ".\results\$($sub.name).txt" -Force )
+    if (!(Test-Path ".\results")) {
+        New-Item -Path ".\results" -ItemType Directory
     }
+    $WAFResults | Out-File -FilePath ( New-Item -Path ".\results\$($sub.name).txt" -Force )
 
     if ($GeneratePowerPoint) {
-        if ($OutputToFile) {
-            .\GeneratePresentation.ps1 -AssessmentReport ".\results\$($sub.name).txt"
-        }
-        else {
-            Write-Output "Could not generate PowerPoint presentation as results are not saved to a file."
-
-        }
+        .\GeneratePresentation.ps1 -AssessmentReport ".\results\$($sub.name).txt"
     }
 
     Write-Output $WAFResults
