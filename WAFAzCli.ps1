@@ -1604,7 +1604,6 @@ foreach ($sub in $AllSubscriptions) {
         "Enable 'LOG_CONNECTIONS' Parameter for PostgreSQL Servers;Custom;80"
         "Enable 'LOG_DISCONNECTIONS' Parameter for PostgreSQL Servers;Custom;80"
         "Enable 'LOG_DURATION' Parameter for PostgreSQL Servers;Custom;80"
-        "Enable 'log_checkpoints' Parameter for PostgreSQL Flexible Servers;Custom;80"
         "Enable Storage Auto-Growth;Custom;80"
     )
 
@@ -1657,14 +1656,14 @@ foreach ($sub in $AllSubscriptions) {
 
             $serverStatus = $null
 
-            $serverDetails = az postgres server show --name $server.name --resource-group $server.resourceGroup | ConvertFrom-Json -Depth 10
+            $serverDetails = az postgres server show --name $server.name --resource-group $server.resourceGroup 2>$null | ConvertFrom-Json -Depth 10
             if ($?) {
                 $serverStatus = "single"
                 $tempPostgreSQLResults += ""
                 $tempPostgreSQLResults += "$($server.name) is a PostgreSQL single server. Single server is due to be deprecated in March 2025. Consider migrating to a flexible server."
             }
             else {
-                $serverDetails = az postgres flexible-server show --name $server.name --resource-group $server.resourceGroup | ConvertFrom-Json -Depth 10
+                $serverDetails = az postgres flexible-server show --name $server.name --resource-group $server.resourceGroup 2>$null | ConvertFrom-Json -Depth 10
                 if ($?) {
                     $serverStatus = "flexible"
                 }
@@ -1700,7 +1699,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Monitor your server to ensure it's healthy and performing as expected
-            $serverMetrics = az monitor metrics alert list --resource $server.id --resource-group $server.resourceGroup
+            $serverMetrics = az monitor metrics alert list --resource $server.id --resource-group $server.resourceGroup 2>$null | ConvertFrom-Json -Depth 10
             if ($serverMetrics) {
                 $tempPostgreSQLResults += "Good: Server is monitored for PostgreSQL server $($server.name)"
                 $postgreSQLControlArray[1].Result = 100
@@ -1734,8 +1733,13 @@ foreach ($sub in $AllSubscriptions) {
 
             # Implement network security groups and firewalls to control access to your database
             if ($serverStatus -match "single") {
-                $firewallRules = az postgres server firewall-rule list --server-name $server.name --resource-group $server.resourceGroup | ConvertFrom-Json -Depth 10
-                if ($firewallRules) {
+                $firewallRules = az postgres server firewall-rule list --server-name $server.name --resource-group $server.resourceGroup 2>$null | ConvertFrom-Json -Depth 10
+                if (!$?) {
+                    $tempPostgreSQLResults += "Informational: Private Access is enabled for PostgreSQL server $($server.name), so the firewall rules are not evaluated."
+                    $postgreSQLControlArray[3].Result = 0
+                    $postgreSQLControlArray[3].Weight = 0
+                }
+                elseif ($firewallRules) {
                     $tempPostgreSQLResults += "Good: Firewall rules are implemented for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[3].Result = 100
                 }
@@ -1745,8 +1749,13 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match "flexible") {
-                $firewallRules = az postgres flexible-server firewall-rule list --name $server.name --resource-group $server.resourceGroup | ConvertFrom-Json -Depth 10
-                if ($firewallRules) {
+                $firewallRules = az postgres flexible-server firewall-rule list --name $server.name --resource-group $server.resourceGroup 2>$null | ConvertFrom-Json -Depth 10
+                if (!$?) {
+                    $tempPostgreSQLResults += "Informational: Private Access is enabled for PostgreSQL server $($server.name), so the firewall rules are not evaluated."
+                    $postgreSQLControlArray[3].Result = 0
+                    $postgreSQLControlArray[3].Weight = 0
+                }
+                elseif ($firewallRules) {
                     $tempPostgreSQLResults += "Good: Firewall rules are implemented for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[3].Result = 100
                 }
@@ -1811,7 +1820,7 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match 'flexible') {
-                $logretention = az postgres flexible-server configuration show --name $server.name --resource-group $server.resourceGroup --config-name log_retention_days
+                $logretention = az postgres flexible-server parameter show --server-name $server.name --resource-group $server.resourceGroup --name logfiles.retention_days
                 if ($logretention.value -ge 7) {
                     $tempPostgreSQLResults += "Good: Log retention period is sufficient for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[7].Result = 100
@@ -1879,7 +1888,7 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match 'flexible') {
-                $connectionThrottling = az postgres flexible-server configuration show --name $server.name --resource-group $server.resourceGroup --config-name connection_throttling
+                $connectionThrottling = az postgres flexible-server parameter show --name $server.name --resource-group $server.resourceGroup --config-name connection_throttle.enable
                 if ($connectionThrottling.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'CONNECTION_THROTTLING' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[10].Result = 100
@@ -1903,7 +1912,7 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match 'flexible') {
-                $logCheckpoints = az postgres flexible-server configuration show --name $server.name --resource-group $server.resourceGroup --config-name log_checkpoints
+                $logCheckpoints = az postgres flexible-server parameter show --name $server.name --resource-group $server.resourceGroup --config-name log_checkpoints
                 if ($logCheckpoints.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'LOG_CHECKPOINTS' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[11].Result = 100
@@ -1927,7 +1936,7 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match 'flexible') {
-                $logConnections = az postgres flexible-server configuration show --name $server.name --resource-group $server.resourceGroup --config-name log_connections
+                $logConnections = az postgres flexible-server parameter show --name $server.name --resource-group $server.resourceGroup --config-name log_connections
                 if ($logConnections.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'LOG_CONNECTIONS' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[12].Result = 100
@@ -1951,7 +1960,7 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match 'flexible') {
-                $logDisconnections = az postgres flexible-server configuration show --name $server.name --resource-group $server.resourceGroup --config-name log_disconnections
+                $logDisconnections = az postgres flexible-server parameter show --name $server.name --resource-group $server.resourceGroup --config-name log_disconnections
                 if ($logDisconnections.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'LOG_DISCONNECTIONS' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[13].Result = 100
@@ -1975,7 +1984,7 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match 'flexible') {
-                $logDuration = az postgres flexible-server configuration show --name $server.name --resource-group $server.resourceGroup --config-name log_duration
+                $logDuration = az postgres flexible-server parameter show --name $server.name --resource-group $server.resourceGroup --config-name log_duration
                 if ($logDuration.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'LOG_DURATION' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[14].Result = 100
@@ -1986,27 +1995,26 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
 
-            # Enable 'log_checkpoints' Parameter for PostgreSQL Flexible Servers
-            if ($serverStatus -match 'flexible') {
-                $logCheckpoints = az postgres flexible-server configuration show --name $server.name --resource-group $server.resourceGroup --config-name log_checkpoints
-                if ($logCheckpoints.value -match 'on') {
-                    $tempPostgreSQLResults += "Good: 'log_checkpoints' parameter is enabled for PostgreSQL server $($server.name)"
+            # Enable Storage Auto-Growth
+            if ($serverStatus -match 'single') {
+                if ($serverDetails.storageProfile.storageAutogrow -match 'Enabled') {
+                    $tempPostgreSQLResults += "Good: Storage Auto-Growth is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[15].Result = 100
                 }
                 else {
-                    $tempPostgreSQLResults += "Bad: 'log_checkpoints' parameter is NOT enabled for PostgreSQL server $($server.name)"
+                    $tempPostgreSQLResults += "Bad: Storage Auto-Growth is NOT enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[15].Result = 0
                 }
             }
-
-            # Enable Storage Auto-Growth
-            if ($serverDetails.storageProfile.storageAutogrow -match 'Enabled') {
-                $tempPostgreSQLResults += "Good: Storage Auto-Growth is enabled for PostgreSQL server $($server.name)"
-                $postgreSQLControlArray[16].Result = 100
-            }
-            else {
-                $tempPostgreSQLResults += "Bad: Storage Auto-Growth is NOT enabled for PostgreSQL server $($server.name)"
-                $postgreSQLControlArray[16].Result = 0
+            if ($serverStatus -match 'flexible') {
+                if ($serverDetails.storage.autoGrow -match 'Enabled') {
+                    $tempPostgreSQLResults += "Good: Storage Auto-Growth is enabled for PostgreSQL server $($server.name)"
+                    $postgreSQLControlArray[15].Result = 100
+                }
+                else {
+                    $tempPostgreSQLResults += "Bad: Storage Auto-Growth is NOT enabled for PostgreSQL server $($server.name)"
+                    $postgreSQLControlArray[15].Result = 0
+                }
             }
 
             # Calculate the weighted average for the PostgreSQL server
@@ -2915,7 +2923,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Review the minimum TLS version for your SQL Database
             $srv = az sql server show --ids $sqlDb.managedBy 2> $null | ConvertFrom-Json -Depth 10
-            if ($srv.minTlsVersion -match "1.2") {
+            if ($srv.minimalTlsVersion -match "1.2") {
                 $tempSQLDbResults += "Good: Minimum TLS version for SQL Database $($sqlDb.name) is 1.2"
                 $sqlDbControlArray[4].Result = 100
             }
@@ -3273,6 +3281,20 @@ foreach ($sub in $AllSubscriptions) {
         $allOpenAIWeightedAverages = Get-AllWeightedAveragesPerService($openAIControlArrayList)
         foreach ($openAIWeightedAverage in $allOpenAIWeightedAverages) {
             $allWeightedAverages += $openAIWeightedAverage
+        }
+    }
+
+    if ($sqlDbControlArray) {
+        $allSQLDbWeightedAverages = Get-AllWeightedAveragesPerService($sqlDbControlArrayList)
+        foreach ($sqlDbWeightedAverage in $allSQLDbWeightedAverages) {
+            $allWeightedAverages += $sqlDbWeightedAverage
+        }
+    }
+
+    if ($sqlMiControlArray) {
+        $allSQLMiWeightedAverages = Get-AllWeightedAveragesPerService($sqlMiControlArrayList)
+        foreach ($sqlMiWeightedAverage in $allSQLMiWeightedAverages) {
+            $allWeightedAverages += $sqlMiWeightedAverage
         }
     }
 
