@@ -217,6 +217,7 @@ foreach ($sub in $AllSubscriptions) {
 
             $strg = $using:strg
             $headers = $using:headers
+            $sub = $using:sub
             $resourceGroup = $strg.id.Split('/')[4]
 
             $strgControlArray = @()
