@@ -216,6 +216,7 @@ foreach ($sub in $AllSubscriptions) {
         $storageJobs += Start-Threadjob -ScriptBlock {
 
             $strg = $using:strg
+            $headers = $using:headers
             $resourceGroup = $strg.id.Split('/')[4]
 
             $strgControlArray = @()
