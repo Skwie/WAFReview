@@ -378,7 +378,7 @@ foreach ($sub in $AllSubscriptions) {
             
             # Regenerate your account keys periodically.
             #$RegenerationLogs = az monitor activity-log list --resource-group $strg.resourceGroup --status Succeeded --offset 90d --query '[*].{authorization:authorization.action,eventTimestamp:eventTimestamp}' | ConvertFrom-Json -Depth 10
-            $filter = "eventTimestamp ge '$(Get-Date).AddDays(-90).ToString('yyyy-MM-ddTHH:mm:ssZ')' and eventTimestamp le '$(Get-Date).ToString('yyyy-MM-ddTHH:mm:ssZ')' and resourceGroupName eq '$resourceGroup'"
+            $filter = "eventTimestamp ge '$((Get-Date).AddDays(-90).ToString('yyyy-MM-ddTHH:mm:ssZ'))' and eventTimestamp le '$((Get-Date).ToString('yyyy-MM-ddTHH:mm:ssZ'))' and resourceGroupName eq '$resourceGroup'"
             $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Insights/eventtypes/management/values?api-version=2015-04-01&`$filter=$($filter)"
             $RegenerationLogs = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value.properties
             $Regenerated = $false
