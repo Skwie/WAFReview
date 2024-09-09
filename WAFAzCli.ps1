@@ -378,7 +378,7 @@ foreach ($sub in $AllSubscriptions) {
             # Regenerate your account keys periodically.
             #$RegenerationLogs = az monitor activity-log list --resource-group $strg.resourceGroup --status Succeeded --offset 90d --query '[*].{authorization:authorization.action,eventTimestamp:eventTimestamp}' | ConvertFrom-Json -Depth 10
             $filter = "eventTimestamp ge '$(Get-Date).AddDays(-90).ToString('yyyy-MM-ddTHH:mm:ssZ')' and eventTimestamp le '$(Get-Date).ToString('yyyy-MM-ddTHH:mm:ssZ')' and resourceGroupName eq '$resourceGroup' and resourceUri eq '/subscriptions/$($sub.id)/resourceGroups/$resourceGroup/providers/Microsoft.Storage/storageAccounts/$($strg.name)'"
-            $uri = "https://management.azure.com/{$($sub.id)}/providers/Microsoft.Insights/eventtypes/management/values?api-version=2015-04-01&`$filter={$filter}"
+            $uri = "https://management.azure.com/$($sub.id)/providers/Microsoft.Insights/eventtypes/management/values?api-version=2015-04-01&`$filter={$filter}"
             $RegenerationLogs = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value.properties
             $Regenerated = $false
             foreach ($RegenLog in $RegenerationLogs) {
@@ -426,7 +426,7 @@ foreach ($sub in $AllSubscriptions) {
             catch {
                 $policy = $null
             }
-            if (($BlobProperties | ConvertFrom-Json -Depth 10).lastAccessTimeTrackingPolicy) {
+            if ($BlobProperties.lastAccessTimeTrackingPolicy) {
                 $tempStorageResults += "Good: Last access time tracking Lifecycle policy found for storage account $($strg.name)."
                 $strgControlArray[12].Result = 100
             }
