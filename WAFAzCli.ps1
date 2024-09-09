@@ -249,7 +249,7 @@ foreach ($sub in $AllSubscriptions) {
             # Turn on soft delete for blob data
             #$BlobProperties = az storage account blob-service-properties show --account-name $strg.name 2> $null 
             $uri = "https://management.azure.com$($strg.id)/blobServices/default?api-version=2023-05-01"
-            $BlobProperties = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value.properties
+            $BlobProperties = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
             if ($BlobProperties.Count -gt 0) {
                 #$RetentionPolicy = $BlobProperties | ConvertFrom-Json -Depth 10 | Select-Object deleteRetentionPolicy
                 if ($BlobProperties.deleteRetentionPolicy.enabled) {
@@ -378,7 +378,7 @@ foreach ($sub in $AllSubscriptions) {
             # Regenerate your account keys periodically.
             #$RegenerationLogs = az monitor activity-log list --resource-group $strg.resourceGroup --status Succeeded --offset 90d --query '[*].{authorization:authorization.action,eventTimestamp:eventTimestamp}' | ConvertFrom-Json -Depth 10
             $filter = "eventTimestamp ge '$(Get-Date).AddDays(-90).ToString('yyyy-MM-ddTHH:mm:ssZ')' and eventTimestamp le '$(Get-Date).ToString('yyyy-MM-ddTHH:mm:ssZ')' and resourceGroupName eq '$resourceGroup' and resourceUri eq '/subscriptions/$($sub.id)/resourceGroups/$resourceGroup/providers/Microsoft.Storage/storageAccounts/$($strg.name)'"
-            $uri = "https://management.azure.com/subscriptions/{$($sub.id)}/providers/Microsoft.Insights/eventtypes/management/values?api-version=2015-04-01&`$filter={$filter}"
+            $uri = "https://management.azure.com/{$($sub.id)}/providers/Microsoft.Insights/eventtypes/management/values?api-version=2015-04-01&`$filter={$filter}"
             $RegenerationLogs = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value.properties
             $Regenerated = $false
             foreach ($RegenLog in $RegenerationLogs) {
