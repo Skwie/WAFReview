@@ -549,7 +549,7 @@ foreach ($sub in $AllSubscriptions) {
     Write-Output "Checking Key Vaults for subscription $($sub.name)..."
 
     #$Keyvaults = az keyvault list 2> $null | ConvertFrom-Json -Depth 10
-    $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.KeyVault/vaults?api-version=2023-05-01"
+    $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.KeyVault/vaults?api-version=2022-07-01"
     $Keyvaults = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
         Write-Error "Unable to retrieve key vaults for subscription $($sub.name)." -ErrorAction Continue
@@ -652,7 +652,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Check for Key Vault Full Administrator Permissions
             #$vaultsettings = az keyvault show --name $keyvault.name | ConvertFrom-Json -Depth 10
-            $uri = "https://management.azure.com$keyvault.id?api-version=2023-05-01"
+            $uri = "https://management.azure.com$keyvault.id?api-version=2022-07-01"
             $vaultsettings = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
             if ('All' -in $vaultsettings.properties.accesspolicies.permissions.certificates -or 'All' -in $vaultsettings.properties.accesspolicies.permissions.keys -or 'All' -in $vaultsettings.properties.accesspolicies.permissions.secrets -or 'All' -in $vaultsettings.properties.accesspolicies.permissions.storage) {
                 $tempVaultResults += "Bad: Full access permissions found on keyvault $($keyvault.name):"
@@ -670,7 +670,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Audit event logging should be active for Azure Key Vault
             #$diag = az monitor diagnostic-settings list --resource $keyvault.id --query '[*].logs | []' | ConvertFrom-Json -Depth 10
-            $uri = "https://management.azure.com$keyvault.id/providers/microsoft.insights/diagnosticSettings?api-version=2023-05-01"
+            $uri = "https://management.azure.com$keyvault.id/providers/microsoft.insights/diagnosticSettings?api-version=2021-05-01-preview"
             $diag = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value.properties
             if (($diag | Where-Object {$_.category -eq 'AuditEvent'}).enabled -eq $True) {
                 $tempVaultResults += "Good: Audit Events are logged for keyvault $($keyvault.name)."
