@@ -771,12 +771,13 @@ foreach ($sub in $AllSubscriptions) {
     ################# Region Virtual Machines #####################
 
     # For Virtual Machines we currently assume that VM Scale Sets are not used, and that all VMs are standalone.
+    # We also do not include Databricks VMs due to their transient nature.
 
     Write-Output "Checking Virtual Machines for subscription $($sub.name)..."
     
     #$VirtualMachines = az vm list 2> $null | ConvertFrom-Json -Depth 10
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01"
-    $VirtualMachines = (((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value) | Where-Object {$_.tags -notcontains 'DatabricksEnvironment'}
+    $VirtualMachines = (((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value) | Where-Object {$_.tags -notmatch 'DatabricksEnvironment'}
     if (!$?) {
         Write-Error "Unable to retrieve virtual machines for subscription $($sub.name)." -ErrorAction Continue
     }
@@ -828,6 +829,7 @@ foreach ($sub in $AllSubscriptions) {
             $vm = $using:vm
             $headers = $using:headers
             $sub = $using:sub
+            $jitPolicies = $using:jitPolicies
 
             $vmControlArray = @()
 
