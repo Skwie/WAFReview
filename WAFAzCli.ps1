@@ -1024,7 +1024,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Enable boot diagnostics for Azure Virtual Machines
-            if ($vm.resources.diagnosticsProfile.bootDiagnostics.enabled -match 'True') {
+            if ($vm.properties.diagnosticsProfile.bootDiagnostics.enabled -match 'True') {
                 $tempVMResults += "Good: Boot Diagnostics are enabled for VM $($vm.name)"
                 $vmControlArray[12].Result = 100
             }
@@ -1087,7 +1087,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Enable JIT Access for Azure Virtual Machines
             if ($jitPolicies) {
-                if ($vm.id -in $jitPolicies) {
+                if ($jitPolicies.properties.virtualMachines -match $vm.id) {
                     $tempVMResults += "Good: JIT Access is enabled for VM $($vm.name)"
                     $vmControlArray[16].Result = 100
                 }
@@ -1110,7 +1110,7 @@ foreach ($sub in $AllSubscriptions) {
                 #$backupItems = az backup item list --vault-name $vault --resource-group $vm.resourceGroup --query '[*].properties.virtualMachineId' 2> $null | ConvertFrom-Json -Depth 10
                 $uri = "https://management.azure.com$($vault.id)/backupProtectedItems?api-version=2024-04-01"
                 $backupItems = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value.id
-                if ($backupItems -contains $vm.id) {
+                if ($backupItems -match $vm.name) {
                     $vmBackedUp = $true
                 }
             }
