@@ -1103,13 +1103,13 @@ foreach ($sub in $AllSubscriptions) {
 
             # Enable VM Backup for Azure Virtual Machines
             #$vaults = az backup vault list --query '[*].name' 2> $null | ConvertFrom-Json -Depth 10
-            $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.RecoveryServices/vaults?api-version=2021-01-01"
+            $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.RecoveryServices/vaults?api-version=2024-04-01"
             $vaults = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             $vmBackedUp = $false
             foreach ($vault in $vaults) {
                 #$backupItems = az backup item list --vault-name $vault --resource-group $vm.resourceGroup --query '[*].properties.virtualMachineId' 2> $null | ConvertFrom-Json -Depth 10
-                $uri = "https://management.azure.com$($vault.id)/backupItems?api-version=2021-01-01"
-                $backupItems = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value.properties.virtualMachineId
+                $uri = "https://management.azure.com$($vault.id)/backupProtectedItems?api-version=2024-04-01"
+                $backupItems = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value.id
                 if ($backupItems -contains $vm.id) {
                     $vmBackedUp = $true
                 }
