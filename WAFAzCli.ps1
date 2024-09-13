@@ -774,7 +774,9 @@ foreach ($sub in $AllSubscriptions) {
 
     Write-Output "Checking Virtual Machines for subscription $($sub.name)..."
     
-    $VirtualMachines = az vm list 2> $null | ConvertFrom-Json -Depth 10
+    #$VirtualMachines = az vm list 2> $null | ConvertFrom-Json -Depth 10
+    $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01"
+    $VirtualMachines = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
         Write-Error "Unable to retrieve virtual machines for subscription $($sub.name)." -ErrorAction Continue
     }
@@ -810,7 +812,9 @@ foreach ($sub in $AllSubscriptions) {
     $vmTotalScore = 0
 
     # Query JIT policies once, as they are not VM-specific
-    $jitPolicies = az security jit-policy list --query '[*].virtualMachines | []' | ConvertFrom-Json -Depth 10
+    #$jitPolicies = az security jit-policy list --query '[*].virtualMachines | []' | ConvertFrom-Json -Depth 10
+    $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Security/jitNetworkAccessPolicies?api-version=2020-01-01"
+    $jitPolicies = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
 
     $vmJobs = @()
     $vmControlArrayList = @()
@@ -822,6 +826,8 @@ foreach ($sub in $AllSubscriptions) {
         $vmJobs += Start-Threadjob -ScriptBlock {
 
             $vm = $using:vm
+            $headers = $using:headers
+            $sub = $using:sub
 
             $vmControlArray = @()
 
@@ -881,7 +887,9 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Restrict public IP addresses for Azure Virtual Machines
-            $VmIpAddresses = az vm list-ip-addresses --name $vm.name --resource-group $vm.resourceGroup | ConvertFrom-Json -Depth 10
+            #$VmIpAddresses = az vm list-ip-addresses --name $vm.name --resource-group $vm.resourceGroup | ConvertFrom-Json -Depth 10
+            $uri = "https://management.azure.com$($vm.id)/instanceView?api-version=2024-07-01"
+            $VmIpAddresses = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).networkProfile.networkInterfaces
             if ($VmIpAddresses.virtualMachine.network.publicIpAddresses) {
                 $tempVMResults += "Bad: Public IP addresses are present on VM $($vm.name)"
                 $vmControlArray[3].Result = 0
@@ -892,7 +900,9 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Restrict IP forwarding for Azure Virtual Machines
-            $VmNICs = az network nic list --query "[?virtualMachine.id == '$($vm.id)']" | ConvertFrom-Json -Depth 10
+            #$VmNICs = az network nic list --query "[?virtualMachine.id == '$($vm.id)']" | ConvertFrom-Json -Depth 10
+            $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Network/networkInterfaces?api-version=2021-02-01"
+            $VmNICs = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             $enableForwarding = $false
             foreach ($nic in $VmNICs) {
                 if ($nic.enableIpForwarding) {
@@ -930,7 +940,9 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Enable Azure Disk Encryption for Azure Virtual Machines
-            $DiskEncryption = az vm encryption show --name $vm.name --resource-group $vm.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+            #$DiskEncryption = az vm encryption show --name $vm.name --resource-group $vm.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+            $uri = "https://management.azure.com$($vm.id)/encryption?api-version=2024-07-01"
+            $DiskEncryption = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
             if ($DiskEncryption) {
                 $tempVMResults += "Good: Disk Encryption is enabled for VM $($vm.name)"
                 $vmControlArray[6].Result = 100
@@ -957,7 +969,9 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Enable Hybrid Benefit for Azure Virtual Machines
-            $detailedVmInfo = az vm get-instance-view --name $vm.name --resource-group $vm.resourceGroup 2> $null | ConvertFrom-Json -Depth 15
+            #$detailedVmInfo = az vm get-instance-view --name $vm.name --resource-group $vm.resourceGroup 2> $null | ConvertFrom-Json -Depth 15
+            $uri = "https://management.azure.com$($vm.id)/instanceView?api-version=2024-07-01"
+            $detailedVmInfo = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
             if ($detailedVmInfo.licenseType -match 'Windows_Server') {
                 $tempVMResults += "Good: Hybrid Benefit is enabled for VM $($vm.name)"
                 $vmControlArray[8].Result = 100
@@ -1106,10 +1120,14 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Enable VM Backup for Azure Virtual Machines
-            $vaults = az backup vault list --query '[*].name' 2> $null | ConvertFrom-Json -Depth 10
+            #$vaults = az backup vault list --query '[*].name' 2> $null | ConvertFrom-Json -Depth 10
+            $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.RecoveryServices/vaults?api-version=2021-01-01"
+            $vaults = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             $vmBackedUp = $false
             foreach ($vault in $vaults) {
-                $backupItems = az backup item list --vault-name $vault --resource-group $vm.resourceGroup --query '[*].properties.virtualMachineId' 2> $null | ConvertFrom-Json -Depth 10
+                #$backupItems = az backup item list --vault-name $vault --resource-group $vm.resourceGroup --query '[*].properties.virtualMachineId' 2> $null | ConvertFrom-Json -Depth 10
+                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($vm.resourceGroup)/providers/Microsoft.RecoveryServices/vaults/$($vault)/backupItems?api-version=2021-01-01"
+                $backupItems = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value.properties.virtualMachineId
                 if ($backupItems -contains $vm.id) {
                     $vmBackedUp = $true
                 }
