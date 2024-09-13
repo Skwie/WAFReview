@@ -941,25 +941,17 @@ foreach ($sub in $AllSubscriptions) {
 
             # Enable Azure Disk Encryption for Azure Virtual Machines
             #$DiskEncryption = az vm encryption show --name $vm.name --resource-group $vm.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
-            $uri = "https://management.azure.com$($vm.id)/encryption?api-version=2024-07-01"
-            $DiskEncryption = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
-            if ($DiskEncryption) {
-                $tempVMResults += "Good: Disk Encryption is enabled for VM $($vm.name)"
+            if ($vm.resources.id -match 'AzureDiskEncryption') {
+                $tempVMResults += "Good: Azure Disk Encryption is enabled for VM $($vm.name)"
                 $vmControlArray[6].Result = 100
             }
             else {
-                $tempVMResults += "Bad: Disk Encryption is NOT enabled for VM $($vm.name)"
+                $tempVMResults += "Bad: Azure Disk Encryption is NOT enabled for VM $($vm.name)"
                 $vmControlArray[6].Result = 0
             }
 
             # Enable Endpoint Protection for Azure Virtual Machines
-            $enableMDE = $false
-            foreach ($resource in $vm.resources) {
-                if ($resource.id -match 'MDE.Windows') {
-                    $enableMDE = $true
-                }
-            }
-            if ($enableMDE) {
+            if ($vm.resources.id -match 'MDE.Windows') {
                 $tempVMResults += "Good: Endpoint Protection is enabled for VM $($vm.name)"
                 $vmControlArray[7].Result = 100
             }
@@ -970,9 +962,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Enable Hybrid Benefit for Azure Virtual Machines
             #$detailedVmInfo = az vm get-instance-view --name $vm.name --resource-group $vm.resourceGroup 2> $null | ConvertFrom-Json -Depth 15
-            $uri = "https://management.azure.com$($vm.id)/instanceView?api-version=2024-07-01"
-            $detailedVmInfo = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
-            if ($detailedVmInfo.licenseType -match 'Windows_Server') {
+            if ($vm.properties.licenseType -match 'Windows_Server') {
                 $tempVMResults += "Good: Hybrid Benefit is enabled for VM $($vm.name)"
                 $vmControlArray[8].Result = 100
             }
@@ -1007,13 +997,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Enable Azure Monitor for Azure Virtual Machines
-            $azMonEnabled = $false
-            foreach ($resource in $vm.resources) {
-                if ($resource.id -match 'AzureMonitorLinuxAgent' -or $resource.id -match 'AzureMonitorWindowsAgent') {
-                    $azMonEnabled = $true
-                }
-            }
-            if ($azMonEnabled) {
+            if ($vm.resources.id -match 'AzureMonitorLinuxAgent' -or $vm.resources.id -match 'AzureMonitorWindowsAgent') {
                 $tempVMResults += "Good: Azure Monitor is enabled for VM $($vm.name)"
                 $vmControlArray[10].Result = 100
             }
@@ -1024,13 +1008,11 @@ foreach ($sub in $AllSubscriptions) {
 
             # Enable VM Insights for Azure Virtual Machines
             $VMInsightsEnabled = $false
-            foreach ($resource in $vm.resources) {
-                if ($resource.id -match 'DependencyAgentLinux' -and $resource.id -match 'AzureMonitorLinuxAgent') {
-                    $VMInsightsEnabled = $true
-                }
-                elseif ($resource.id -match 'DependencyAgentWindows' -and $resource.id -match 'AzureMonitorWindowsAgent') {
-                    $VMInsightsEnabled = $true
-                }
+            if ($vm.resources.id -match 'DependencyAgentLinux' -and $vm.resources.id -match 'AzureMonitorLinuxAgent') {
+                $VMInsightsEnabled = $true
+            }
+            elseif ($vm.resources.id -match 'DependencyAgentWindows' -and $vm.resources.id -match 'AzureMonitorWindowsAgent') {
+                $VMInsightsEnabled = $true
             }
             if ($VMInsightsEnabled) {
                 $tempVMResults += "Good: VM Insights is enabled for VM $($vm.name)"
@@ -1042,7 +1024,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Enable boot diagnostics for Azure Virtual Machines
-            if ($vm.diagnosticsProfile.bootDiagnostics.enabled -match 'True') {
+            if ($vm.resources.diagnosticsProfile.bootDiagnostics.enabled -match 'True') {
                 $tempVMResults += "Good: Boot Diagnostics are enabled for VM $($vm.name)"
                 $vmControlArray[12].Result = 100
             }
@@ -1071,7 +1053,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Use Managed Disks for Azure Virtual Machines
             $managedDisks = $true
-            foreach ($disk in $vm.storageProfile.osDisk.managedDisk) {
+            foreach ($disk in $vm.properties.storageProfile.osDisk.managedDisk) {
                 if ($disk -match 'null') {
                     $managedDisks = $false
                 }
@@ -1081,13 +1063,13 @@ foreach ($sub in $AllSubscriptions) {
                 $vmControlArray[14].Result = 100
             }
             else {
-                $tempVMResults += "Bad: Managed Disks are NOT used for VM $($vm.name)"
+                $tempVMResults += "Bad: Not all disks are Managed Disks for VM $($vm.name)"
                 $vmControlArray[14].Result = 0
             }
 
             # Disable Premium SSD for Azure Virtual Machines
             $premiumSSD = $false
-            foreach ($disk in $vm.storageProfile.osDisk) {
+            foreach ($disk in $vm.properties.storageProfile.osDisk) {
                 if ($disk.managedDisk.storageAccountType -match 'Premium') {
                     $tempVMResults += "Bad: Premium SSD is used for OS Disk on VM $($vm.name)"
                     $premiumSSD = $true
@@ -1126,7 +1108,7 @@ foreach ($sub in $AllSubscriptions) {
             $vmBackedUp = $false
             foreach ($vault in $vaults) {
                 #$backupItems = az backup item list --vault-name $vault --resource-group $vm.resourceGroup --query '[*].properties.virtualMachineId' 2> $null | ConvertFrom-Json -Depth 10
-                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($vm.resourceGroup)/providers/Microsoft.RecoveryServices/vaults/$($vault)/backupItems?api-version=2021-01-01"
+                $uri = "https://management.azure.com$($vault.id)/backupItems?api-version=2021-01-01"
                 $backupItems = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value.properties.virtualMachineId
                 if ($backupItems -contains $vm.id) {
                     $vmBackedUp = $true
