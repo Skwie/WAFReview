@@ -776,7 +776,7 @@ foreach ($sub in $AllSubscriptions) {
     
     #$VirtualMachines = az vm list 2> $null | ConvertFrom-Json -Depth 10
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01"
-    $VirtualMachines = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+    $VirtualMachines = (((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value) | Where-Object {$_.tags -notcontains 'DatabricksEnvironment'}
     if (!$?) {
         Write-Error "Unable to retrieve virtual machines for subscription $($sub.name)." -ErrorAction Continue
     }
@@ -888,9 +888,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Restrict public IP addresses for Azure Virtual Machines
             #$VmIpAddresses = az vm list-ip-addresses --name $vm.name --resource-group $vm.resourceGroup | ConvertFrom-Json -Depth 10
-            $uri = "https://management.azure.com$($vm.id)/instanceView?api-version=2024-07-01"
-            $VmIpAddresses = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).networkProfile.networkInterfaces
-            if ($VmIpAddresses.virtualMachine.network.publicIpAddresses) {
+            if ($Vm.networkProfile.networkInterfaceConfigurations.ipConfigurations.publicIpAddressConfiguration) {
                 $tempVMResults += "Bad: Public IP addresses are present on VM $($vm.name)"
                 $vmControlArray[3].Result = 0
             }
@@ -902,7 +900,7 @@ foreach ($sub in $AllSubscriptions) {
             # Restrict IP forwarding for Azure Virtual Machines
             #$VmNICs = az network nic list --query "[?virtualMachine.id == '$($vm.id)']" | ConvertFrom-Json -Depth 10
             $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Network/networkInterfaces?api-version=2021-02-01"
-            $VmNICs = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            $VmNICs = (((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value) | Where-Object {$_.properties.virtualMachine.id -eq $vm.id}
             $enableForwarding = $false
             foreach ($nic in $VmNICs) {
                 if ($nic.enableIpForwarding) {
