@@ -1479,7 +1479,7 @@ foreach ($sub in $AllSubscriptions) {
                     }
                 }
                 else {
-                    $tempAppServiceResults += "Informational: Application Insights Alerts are not enabled for App Service $($appservice.name)"
+                    $tempAppServiceResults += "Informational: We have insufficient permissions on App Service $($appservice.name), so Application Insights Alerts status is not evaluated."
                     $appServiceControlArray[13].Result = 0
                     $appServiceControlArray[13].Weight = 0
                 }
