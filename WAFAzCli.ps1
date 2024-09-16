@@ -1262,6 +1262,14 @@ foreach ($sub in $AllSubscriptions) {
                 $tempAppServiceResults += ""
                 $tempAppServiceResults += "----- App Service - $($appservice.name) -----"
                 $tempAppServiceResults += ""
+
+                try {
+                    $uri = "https://management.azure.com$($appService.id)/config/appsettings/list?api-version=2023-12-01"
+                    $appSettings = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Post).Content | ConvertFrom-Json -Depth 10).properties
+                }
+                catch {
+                    $appSettings = $null
+                }
     
                 # Consider disabling ARR Affinity for your App Service
                 if ($appService.properties.clientAffinityEnabled -match 'False') {
@@ -1274,7 +1282,9 @@ foreach ($sub in $AllSubscriptions) {
                 }
     
                 # Enable Always On to ensure Web Jobs run reliably
-                if ($appService.properties.siteConfig.alwaysOn -match 'True') {
+                $uri = "https://management.azure.com$($appService.id)/config/web?api-version=2021-02-01"
+                $appConfig = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
+                if ($appConfig.alwaysOn -match 'True') {
                     $tempAppServiceResults += "Good: Always On is enabled for App Service $($appservice.name)"
                     $appServiceControlArray[1].Result = 100
                 }
@@ -1284,7 +1294,7 @@ foreach ($sub in $AllSubscriptions) {
                 }
     
                 # Access the on-prem database using private connections like Azure VPN or Express Route
-                if ($appService.properties.publicNetworkAccess -notmatch 'Enabled') {
+                if ($appService.properties.publicNetworkAccess -match 'Disabled') {
                     $tempAppServiceResults += "Good: Public Network Access is disabled for App Service $($appservice.name)"
                     $appServiceControlArray[2].Result = 100
                 }
@@ -1295,7 +1305,7 @@ foreach ($sub in $AllSubscriptions) {
     
                 # Set up backup and restore
                 #$backupConf = az webapp config backup show --resource-group $appservice.resourceGroup --webapp-name $appservice.name 2> $null | ConvertFrom-Json -Depth 10
-                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.properties.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/config/backup/list?api-version=2023-12-01"
+                $uri = "https://management.azure.com$($appService.id)/config/backup/list?api-version=2023-12-01"
                 try {
                     $backupConf = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Post).Content | ConvertFrom-Json -Depth 10)
                 }
@@ -1374,31 +1384,38 @@ foreach ($sub in $AllSubscriptions) {
                     }
 
                     # Enable Local Cache to reduce dependencies on cluster file servers
-                    if ($aseDetails.sku.capacity -eq 1) {
-                        if ($appSettings -match 'WEBSITE_LOCAL_CACHE_OPTION') {
-                            $tempAppServiceResults += "Good: Local Cache is enabled for App Service with single instance $($appservice.name)"
-                            $appServiceControlArray[8].Result = 100
+                    if ($appSettings) {
+                        if ($aseDetails.sku.capacity -eq 1) {
+                            if ($appSettings -match 'WEBSITE_LOCAL_CACHE_OPTION') {
+                                $tempAppServiceResults += "Good: Local Cache is enabled for App Service with single instance $($appservice.name)"
+                                $appServiceControlArray[8].Result = 100
+                            }
+                            else {
+                                $tempAppServiceResults += "Bad: Local Cache is NOT enabled for App Service with single instance $($appservice.name)"
+                                $appServiceControlArray[8].Result = 0
+                            }
                         }
                         else {
-                            $tempAppServiceResults += "Bad: Local Cache is NOT enabled for App Service with single instance $($appservice.name)"
-                            $appServiceControlArray[8].Result = 0
+                            if ($appSettings -match 'WEBSITE_LOCAL_CACHE_OPTION') {
+                                $tempAppServiceResults += "Bad: Local Cache is enabled for App Service with more than 1 instance $($appservice.name)"
+                                $appServiceControlArray[8].Result = 0
+                            }
+                            else {
+                                $tempAppServiceResults += "Good: Local Cache is not enabled for App Service with more than 1 instance $($appservice.name)"
+                                $appServiceControlArray[8].Result = 100
+                            }
                         }
                     }
                     else {
-                        if ($appSettings -match 'WEBSITE_LOCAL_CACHE_OPTION') {
-                            $tempAppServiceResults += "Bad: Local Cache is enabled for App Service with more than 1 instance $($appservice.name)"
-                            $appServiceControlArray[8].Result = 0
-                        }
-                        else {
-                            $tempAppServiceResults += "Good: Local Cache is not enabled for App Service with more than 1 instance $($appservice.name)"
-                            $appServiceControlArray[8].Result = 100
-                        }
+                        $tempAppServiceResults += "Informational: We have insufficient permissions on App Service $($appservice.name), so Local Cache status is not evaluated."
+                        $appServiceControlArray[8].Result = 0
+                        $appServiceControlArray[8].Weight = 0
                     }
                 }
     
                 # Use Deployment slots for resilient code deployments
                 #$deploymentSlots = az webapp deployment slot list --name $appservice.name --resource-group $appservice.resourceGroup --query '[*].name' | ConvertFrom-Json -Depth 10
-                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.properties.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/slots?api-version=2023-12-01"
+                $uri = "https://management.azure.com$($appService.id)/slots?api-version=2023-12-01"
                 $deploymentSlots = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
                 if ($deploymentSlots) {
                     $tempAppServiceResults += "Good: Deployment slots are used for App Service $($appservice.name)"
@@ -1411,19 +1428,24 @@ foreach ($sub in $AllSubscriptions) {
     
                 # Use Run From Package to avoid deployment conflicts
                 #$appSettings = az webapp config appsettings list --name $appservice.name --resource-group $appservice.resourceGroup | ConvertFrom-Json -Depth 10
-                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.properties.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/config/appsettings/list?api-version=2023-12-01"
-                $appSettings = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Post).Content | ConvertFrom-Json -Depth 10).properties
-                if (($appSettings -match 'WEBSITE_RUN_FROM_PACKAGE').slotSetting -match 'True') {
-                    $tempAppServiceResults += "Good: Run From Package is used for App Service $($appservice.name)"
-                    $appServiceControlArray[10].Result = 100
+                if ($appSettings) {
+                    if (($appSettings -match 'WEBSITE_RUN_FROM_PACKAGE').slotSetting -match 'True') {
+                        $tempAppServiceResults += "Good: Run From Package is used for App Service $($appservice.name)"
+                        $appServiceControlArray[10].Result = 100
+                    }
+                    else {
+                        $tempAppServiceResults += "Bad: Run From Package is NOT used for App Service $($appservice.name)"
+                        $appServiceControlArray[10].Result = 0
+                    }
                 }
                 else {
-                    $tempAppServiceResults += "Bad: Run From Package is NOT used for App Service $($appservice.name)"
+                    $tempAppServiceResults += "Informational: We have insufficient permissions on App Service $($appservice.name), so Run From Package status is not evaluated."
                     $appServiceControlArray[10].Result = 0
+                    $appServiceControlArray[10].Weight = 0
                 }
     
                 # Enable Health check to identify non-responsive workers
-                if ($appService.properties.siteConfig.healthCheckPath) {
+                if ($appConfig.healthCheckPath) {
                     $tempAppServiceResults += "Good: Health check is enabled for App Service $($appservice.name)"
                     $appServiceControlArray[11].Result = 100
                 }
@@ -1446,13 +1468,20 @@ foreach ($sub in $AllSubscriptions) {
                 }
     
                 # Enable Application Insights Alerts to signal fault conditions
-                if ($appSettings -match 'APPLICATIONINSIGHTS_CONNECTION_STRING' -or $appSettings -match 'APPINSIGHTS_INSTRUMENTATIONKEY') {
-                    $tempAppServiceResults += "Good: Application Insights Alerts are enabled for App Service $($appservice.name)"
-                    $appServiceControlArray[13].Result = 100
+                if ($appSettings) {
+                    if ($appSettings -match 'APPLICATIONINSIGHTS_CONNECTION_STRING' -or $appSettings -match 'APPINSIGHTS_INSTRUMENTATIONKEY') {
+                        $tempAppServiceResults += "Good: Application Insights Alerts are enabled for App Service $($appservice.name)"
+                        $appServiceControlArray[13].Result = 100
+                    }
+                    else {
+                        $tempAppServiceResults += "Bad: Application Insights Alerts are NOT enabled for App Service $($appservice.name)"
+                        $appServiceControlArray[13].Result = 0
+                    }
                 }
                 else {
-                    $tempAppServiceResults += "Bad: Application Insights Alerts are NOT enabled for App Service $($appservice.name)"
+                    $tempAppServiceResults += "Informational: Application Insights Alerts are not enabled for App Service $($appservice.name)"
                     $appServiceControlArray[13].Result = 0
+                    $appServiceControlArray[13].Weight = 0
                 }
     
                 # Use a scale-out and scale-in rule combination to optimize costs if autoscale is used
@@ -1467,14 +1496,14 @@ foreach ($sub in $AllSubscriptions) {
                     }
                 }
                 else {
-                    $tempAppServiceResults += "Informational: Autoscale is not enabled for App Service $($appservice.name), so the app service plan is not evaluated."
+                    $tempAppServiceResults += "Informational: Autoscale is not enabled for App Service $($appservice.name), so Scale-in and -Out are not evaluated."
                     $appServiceControlArray[14].Result = 0
                     $appServiceControlArray[14].Weight = 0
                 }
     
                 # Check for Latest Version of .NET Framework
-                if ($appService.properties.siteConfig.netFrameworkVersion) {
-                    if ($appService.properties.siteConfig.netFrameworkVersion -match 'v4.8') {
+                if ($appConfig.netFrameworkVersion) {
+                    if ($appConfig.netFrameworkVersion -match 'v4.8') {
                         $tempAppServiceResults += "Good: Latest version of .NET Framework is used for App Service $($appservice.name)"
                         $appServiceControlArray[15].Result = 100
                     }
@@ -1490,8 +1519,8 @@ foreach ($sub in $AllSubscriptions) {
                 }
     
                 # Check for latest version of Java
-                if ($appService.properties.siteConfig.javaVersion) {
-                    if ($appService.properties.siteConfig.javaVersion -match '1.8') {
+                if ($appConfig.javaVersion) {
+                    if ($appConfig.javaVersion -match '1.8') {
                         $tempAppServiceResults += "Good: Latest version of Java is used for App Service $($appservice.name)"
                         $appServiceControlArray[16].Result = 100
                     }
@@ -1507,8 +1536,8 @@ foreach ($sub in $AllSubscriptions) {
                 }
     
                 # Check for Latest Version of PHP
-                if ($appService.properties.siteConfig.phpVersion) {
-                    if ($appService.properties.siteConfig.phpVersion -match '8.2') {
+                if ($appConfig.phpVersion) {
+                    if ($appConfig.phpVersion -match '8.2') {
                         $tempAppServiceResults += "Good: Latest version of PHP is used for App Service $($appservice.name)"
                         $appServiceControlArray[17].Result = 100
                     }
@@ -1524,8 +1553,8 @@ foreach ($sub in $AllSubscriptions) {
                 }
     
                 # Check for Latest Version of Python
-                if ($appService.properties.siteConfig.pythonVersion) {
-                    if ($appService.properties.siteConfig.pythonVersion -match '3.12') {
+                if ($appConfig.pythonVersion) {
+                    if ($appConfig.pythonVersion -match '3.12') {
                         $tempAppServiceResults += "Good: Latest version of Python is used for App Service $($appservice.name)"
                         $appServiceControlArray[18].Result = 100
                     }
@@ -1558,17 +1587,17 @@ foreach ($sub in $AllSubscriptions) {
                 }
     
                 # Check for TLS protocol version
-                if ($appService.properties.siteConfig.minTlsVersion -match '1.2') {
-                    $tempAppServiceResults += "Good: TLS protocol version is set to 1.2 for App Service $($appservice.name)"
+                if ($appConfig.minTlsVersion -match '1.2' -or $appService.properties.siteConfig.minTlsVersion -match '1.3') {
+                    $tempAppServiceResults += "Good: TLS protocol version is set to 1.2 or higher for App Service $($appservice.name)"
                     $appServiceControlArray[20].Result = 100
                 }
                 else {
-                    $tempAppServiceResults += "Bad: TLS protocol version is NOT set to 1.2 for App Service $($appservice.name)"
+                    $tempAppServiceResults += "Bad: TLS protocol version is NOT set to 1.2 or higher for App Service $($appservice.name)"
                     $appServiceControlArray[20].Result = 0
                 }
     
                 # Check that Azure App Service is using the latest version of HTTP
-                if ($appService.properties.siteConfig.http20Enabled -match 'True') {
+                if ($appConfig.http20Enabled -match 'True') {
                     $tempAppServiceResults += "Good: Latest version of HTTP is used for App Service $($appservice.name)"
                     $appServiceControlArray[21].Result = 100
                 }
@@ -1588,7 +1617,7 @@ foreach ($sub in $AllSubscriptions) {
                 }
     
                 # Disable plain FTP deployment
-                if ($appService.properties.siteConfig.ftpsState -match 'FtpsOnly' -or $appService.properties.siteconfig.ftpsState -match 'Disabled') {
+                if ($appConfig.ftpsState -match 'FtpsOnly' -or $appConfig.ftpsState -match 'Disabled') {
                     $tempAppServiceResults += "Good: FTP access is disabled for App Service $($appservice.name)"
                     $appServiceControlArray[23].Result = 100
                 }
@@ -1598,7 +1627,7 @@ foreach ($sub in $AllSubscriptions) {
                 }
     
                 # Disable remote debugging
-                if ($appService.properties.siteConfig.remoteDebuggingEnabled -match 'False') {
+                if ($appConfig.remoteDebuggingEnabled -match 'False') {
                     $tempAppServiceResults += "Good: Remote debugging is disabled for App Service $($appservice.name)"
                     $appServiceControlArray[24].Result = 100
                 }
@@ -1609,15 +1638,25 @@ foreach ($sub in $AllSubscriptions) {
     
                 # Enable App Service Authentication
                 #$appAuth = az webapp auth show --ids $appservice.id 2> $null | ConvertFrom-Json -Depth 10
-                $uri = "https://management.azure.com$($appservice.id)/config/authsettings/list?api-version=2023-12-01"
-                $appAuth = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Post).Content | ConvertFrom-Json -Depth 10)
-                if ($appAuth.enabled -match 'True') {
-                    $tempAppServiceResults += "Good: App Service Authentication is enabled for App Service $($appservice.name)"
-                    $appServiceControlArray[25].Result = 100
+                try {
+                    $uri = "https://management.azure.com$($appservice.id)/config/authsettings/list?api-version=2023-12-01"
+                    $appAuth = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Post).Content | ConvertFrom-Json -Depth 10)
                 }
-                else {
-                    $tempAppServiceResults += "Bad: App Service Authentication is NOT enabled for App Service $($appservice.name)"
+                catch {
+                    $appAuth = $null
+                    $tempAppServiceResults += "Informational: We have insufficient permissions on App Service $($appservice.name) to evaluate App Service Authentication."
                     $appServiceControlArray[25].Result = 0
+                    $appServiceControlArray[25].Weight = 0
+                }
+                if ($appAuth) {
+                    if ($appAuth.enabled -match 'True') {
+                        $tempAppServiceResults += "Good: App Service Authentication is enabled for App Service $($appservice.name)"
+                        $appServiceControlArray[25].Result = 100
+                    }
+                    else {
+                        $tempAppServiceResults += "Bad: App Service Authentication is NOT enabled for App Service $($appservice.name)"
+                        $appServiceControlArray[25].Result = 0
+                    }
                 }
     
                 # Enable HTTPS-only traffic
@@ -1643,7 +1682,7 @@ foreach ($sub in $AllSubscriptions) {
 
                 # Private Endpoint in Use
                 #$privateEndpoint = az network private-endpoint-connection list --name $appService.name --resource-group $appService.resourceGroup --type 'Microsoft.Web/Sites' 2> $null | ConvertFrom-Json -Depth 10
-                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.properties.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/privateEndpointConnections?api-version=2023-12-01"
+                $uri = "https://management.azure.com$($appService.id)/privateEndpointConnections?api-version=2023-12-01"
                 $privateEndpoint = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($privateEndpoint) {
                     $tempAppServiceResults += "Good: Private Endpoint is in use for App Service $($appservice.name)"
