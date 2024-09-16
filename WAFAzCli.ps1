@@ -1308,17 +1308,19 @@ foreach ($sub in $AllSubscriptions) {
                 $uri = "https://management.azure.com$($appService.id)/config/backup/list?api-version=2023-12-01"
                 try {
                     $backupConf = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Post).Content | ConvertFrom-Json -Depth 10)
-                }
-                catch{
-                    $backupConf = $null
-                }
-                if (!$backupConf) {
-                    $tempAppServiceResults += "Bad: Backup and Restore is NOT configured for App Service $($appservice.name)"
-                    $appServiceControlArray[3].Result = 0
-                }
-                else {
                     $tempAppServiceResults += "Good: Backup and Restore is configured for App Service $($appservice.name)"
                     $appServiceControlArray[3].Result = 100
+                }
+                catch {
+                    if ($_.Exception.Message -contains 'The remote server returned an error: (404) Not Found.') {
+                        $tempAppServiceResults += "Bad: Backup and Restore is NOT configured for App Service $($appservice.name)"
+                        $appServiceControlArray[3].Result = 0
+                    }
+                    elseif ($_.Exception.Message -contains 'The remote server returned an error: (403) Forbidden.') {
+                        $tempAppServiceResults += "Informational: We have insufficient permissions on App Service $($appservice.name) to evaluate Backup and Restore."
+                        $appServiceControlArray[3].Result = 0
+                    
+                    }
                 }
     
                 # Understand IP Address deprecation impact
@@ -1333,7 +1335,7 @@ foreach ($sub in $AllSubscriptions) {
     
                 # Ensure App Service Environments (ASE) are deployed in highly available configurations across Availability Zones
                 #$aseDetails = az appservice plan show --id $appDetails.appServicePlanId | ConvertFrom-Json -Depth 10
-                if (!$appService.properties.hostingEnvironmentProfile) {
+                if (!$appService.properties.serverFarmId) {
                     $tempAppServiceResults += "Informational: App Service Plan ID not found for App Service $($appservice.name), so the app service plan is not evaluated."
                     $appServiceControlArray[5].Result = 0
                     $appServiceControlArray[5].Weight = 0
@@ -1345,7 +1347,7 @@ foreach ($sub in $AllSubscriptions) {
                     $appServiceControlArray[8].Weight = 0
                 }
                 else {
-                    $uri = "https://management.azure.com$($appService.properties.hostingEnvironmentProfile.id)?api-version=2021-02-01"
+                    $uri = "https://management.azure.com$($appService.properties.serverFarmId)?api-version=2021-02-01"
                     $aseDetails = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                     if ($aseDetails.properties.zoneRedundant -match 'True') {
                         $tempAppServiceResults += "Good: ASE is deployed in a highly available configuration across Availability Zones for App Service $($appservice.name)"
