@@ -1312,14 +1312,13 @@ foreach ($sub in $AllSubscriptions) {
                     $appServiceControlArray[3].Result = 100
                 }
                 catch {
-                    if ($_.Exception.Message -contains 'The remote server returned an error: (404) Not Found.') {
+                    if ($_.Exception.Message.ToString() -contains 'The remote server returned an error: (404) Not Found.') {
                         $tempAppServiceResults += "Bad: Backup and Restore is NOT configured for App Service $($appservice.name)"
                         $appServiceControlArray[3].Result = 0
                     }
-                    elseif ($_.Exception.Message -contains 'The remote server returned an error: (403) Forbidden.') {
+                    elseif ($_.Exception.Message.ToString() -contains 'The remote server returned an error: (403) Forbidden.') {
                         $tempAppServiceResults += "Informational: We have insufficient permissions on App Service $($appservice.name) to evaluate Backup and Restore."
                         $appServiceControlArray[3].Result = 0
-                    
                     }
                 }
     
