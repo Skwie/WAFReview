@@ -1180,12 +1180,12 @@ foreach ($sub in $AllSubscriptions) {
         "Understand IP Address deprecation impact;Reliability;70"
         "Ensure App Service Environments (ASE) are deployed in highly available configurations across Availability Zones;Reliability;80"
         "Plan for scaling out the ASE cluster;Reliability;35"
+        "Use Basic or higher plans with two or more worker instances for high availability;Reliability,Operational Excellence;60"
+        "Enable Local Cache to reduce dependencies on cluster file servers;Reliability,Operational Excellence;50"
         "Use Deployment slots for resilient code deployments;Reliability,Operational Excellence;75"
         "Use Run From Package to avoid deployment conflicts;Reliability,Operational Excellence;80"
-        "Use Basic or higher plans with two or more worker instances for high availability;Reliability,Operational Excellence;60"
         "Enable Health check to identify non-responsive workers;Reliability,Operational Excellence;85"
         "Enable Autoscale to ensure adequate resources are available to service requests;Reliability,Operational Excellence;60"
-        "Enable Local Cache to reduce dependencies on cluster file servers;Reliability,Operational Excellence;50"
         "Enable Application Insights Alerts to signal fault conditions;Reliability,Operational Excellence;80"
         "Use a scale-out and scale-in rule combination to optimize costs;Cost Optimization;80"
         "Check for Latest Version of .NET Framework;Custom;80"
@@ -1297,7 +1297,7 @@ foreach ($sub in $AllSubscriptions) {
     
                 # Set up backup and restore
                 #$backupConf = az webapp config backup show --resource-group $appservice.resourceGroup --webapp-name $appservice.name 2> $null | ConvertFrom-Json -Depth 10
-                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/config/backup?api-version=2021-02-01"
+                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/config/backup?api-version=2024-03-01"
                 $backupConf = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if (!$backupConf) {
                     $tempAppServiceResults += "Bad: Backup and Restore is NOT configured for App Service $($appservice.name)"
@@ -1320,113 +1320,126 @@ foreach ($sub in $AllSubscriptions) {
     
                 # Ensure App Service Environments (ASE) are deployed in highly available configurations across Availability Zones
                 #$aseDetails = az appservice plan show --id $appDetails.appServicePlanId | ConvertFrom-Json -Depth 10
-                $uri = "https://management.azure.com$($appDetails.appServicePlanId)?api-version=2021-02-01"
-                $aseDetails = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
-                if ($aseDetails.properties.zoneRedundant -match 'True') {
-                    $tempAppServiceResults += "Good: ASE is deployed in a highly available configuration across Availability Zones for App Service $($appservice.name)"
-                    $appServiceControlArray[5].Result = 100
-                }
-                else {
-                    $tempAppServiceResults += "Bad: ASE is NOT deployed in a highly available configuration across Availability Zones for App Service $($appservice.name)"
+                if ($appDetails.hostingEnvironmentProfile -match 'null') {
+                    $tempAppServiceResults += "Informational: App Service Plan ID not found for App Service $($appservice.name), so the app service plan is not evaluated."
                     $appServiceControlArray[5].Result = 0
-                }
-    
-                # Plan for scaling out the ASE cluster
-                if ($aseDetails.sku.capacity -gt 1) {
-                    $tempAppServiceResults += "Informational: ASE cluster is scaled out for App Service $($appservice.name)"
-                    $appServiceControlArray[6].Result = 50
+                    $appServiceControlArray[5].Weight = 0
+                    $appServiceControlArray[6].Result = 0
+                    $appServiceControlArray[6].Weight = 0
+                    $appServiceControlArray[7].Result = 0
+                    $appServiceControlArray[7].Weight = 0
+                    $appServiceControlArray[8].Result = 0
+                    $appServiceControlArray[8].Weight = 0
                 }
                 else {
-                    $tempAppServiceResults += "Informational: ASE cluster is NOT scaled out for App Service $($appservice.name)"
-                    $appServiceControlArray[6].Result = 50
+                    $uri = "https://management.azure.com$($appDetails.hostingEnvironmentProfile.id)?api-version=2021-02-01"
+                    $aseDetails = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
+                    if ($aseDetails.properties.zoneRedundant -match 'True') {
+                        $tempAppServiceResults += "Good: ASE is deployed in a highly available configuration across Availability Zones for App Service $($appservice.name)"
+                        $appServiceControlArray[5].Result = 100
+                    }
+                    else {
+                        $tempAppServiceResults += "Bad: ASE is NOT deployed in a highly available configuration across Availability Zones for App Service $($appservice.name)"
+                        $appServiceControlArray[5].Result = 0
+                    }
+        
+                    # Plan for scaling out the ASE cluster
+                    if ($aseDetails.sku.capacity -gt 1) {
+                        $tempAppServiceResults += "Informational: ASE cluster is scaled out for App Service $($appservice.name)"
+                        $appServiceControlArray[6].Result = 50
+                    }
+                    else {
+                        $tempAppServiceResults += "Informational: ASE cluster is NOT scaled out for App Service $($appservice.name)"
+                        $appServiceControlArray[6].Result = 50
+                    }
+
+                    # Use Basic or higher plans with two or more worker instances for high availability
+                    if ($aseDetails.sku.capacity -ge 2) {
+                        if ($aseDetails.sku.tier -match 'Basic' -or $aseDetails.sku.tier -match 'Standard' -or $aseDetails.sku.tier -match 'Premium') {
+                            $tempAppServiceResults += "Good: Basic or higher plans with two or more worker instances are used for App Service $($appservice.name)"
+                            $appServiceControlArray[7].Result = 100
+                        }
+                        else {
+                            $tempAppServiceResults += "Bad: Basic or higher plans with two or more worker instances are NOT used for App Service $($appservice.name)"
+                            $appServiceControlArray[7].Result = 0
+                        }
+                    }
+                    else {
+                        $tempAppServiceResults += "Informational: Only one worker instance is active for $($appservice.name), so the app service plan is not evaluated."
+                        $appServiceControlArray[7].Result = 0
+                        $appServiceControlArray[7].Weight = 0
+                    }
+
+                    # Enable Local Cache to reduce dependencies on cluster file servers
+                    if ($aseDetails.sku.capacity -eq 1) {
+                        if ($appSettings -match 'WEBSITE_LOCAL_CACHE_OPTION') {
+                            $tempAppServiceResults += "Good: Local Cache is enabled for App Service with single instance $($appservice.name)"
+                            $appServiceControlArray[8].Result = 100
+                        }
+                        else {
+                            $tempAppServiceResults += "Bad: Local Cache is NOT enabled for App Service with single instance $($appservice.name)"
+                            $appServiceControlArray[8].Result = 0
+                        }
+                    }
+                    else {
+                        if ($appSettings -match 'WEBSITE_LOCAL_CACHE_OPTION') {
+                            $tempAppServiceResults += "Bad: Local Cache is enabled for App Service with more than 1 instance $($appservice.name)"
+                            $appServiceControlArray[8].Result = 0
+                        }
+                        else {
+                            $tempAppServiceResults += "Good: Local Cache is not enabled for App Service with more than 1 instance $($appservice.name)"
+                            $appServiceControlArray[8].Result = 100
+                        }
+                    }
                 }
     
                 # Use Deployment slots for resilient code deployments
                 #$deploymentSlots = az webapp deployment slot list --name $appservice.name --resource-group $appservice.resourceGroup --query '[*].name' | ConvertFrom-Json -Depth 10
-                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/slots?api-version=2021-02-01"
+                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/slots?api-version=2024-03-01"
                 $deploymentSlots = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
                 if ($deploymentSlots) {
                     $tempAppServiceResults += "Good: Deployment slots are used for App Service $($appservice.name)"
-                    $appServiceControlArray[7].Result = 100
+                    $appServiceControlArray[9].Result = 100
                 }
                 else {
                     $tempAppServiceResults += "Bad: No Deployment slots are used for App Service $($appservice.name)"
-                    $appServiceControlArray[7].Result = 0
+                    $appServiceControlArray[9].Result = 0
                 }
     
                 # Use Run From Package to avoid deployment conflicts
                 #$appSettings = az webapp config appsettings list --name $appservice.name --resource-group $appservice.resourceGroup | ConvertFrom-Json -Depth 10
-                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/config/appsettings?api-version=2021-02-01"
+                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/config/appsettings?api-version=2024-03-01"
                 $appSettings = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
                 if (($appSettings -match 'WEBSITE_RUN_FROM_PACKAGE').slotSetting -match 'True') {
                     $tempAppServiceResults += "Good: Run From Package is used for App Service $($appservice.name)"
-                    $appServiceControlArray[8].Result = 100
+                    $appServiceControlArray[10].Result = 100
                 }
                 else {
                     $tempAppServiceResults += "Bad: Run From Package is NOT used for App Service $($appservice.name)"
-                    $appServiceControlArray[8].Result = 0
-                }
-    
-                # Use Basic or higher plans with two or more worker instances for high availability
-                if ($aseDetails.sku.capacity -ge 2) {
-                    if ($aseDetails.sku.tier -match 'Basic' -or $aseDetails.sku.tier -match 'Standard' -or $aseDetails.sku.tier -match 'Premium') {
-                        $tempAppServiceResults += "Good: Basic or higher plans with two or more worker instances are used for App Service $($appservice.name)"
-                        $appServiceControlArray[9].Result = 100
-                    }
-                    else {
-                        $tempAppServiceResults += "Bad: Basic or higher plans with two or more worker instances are NOT used for App Service $($appservice.name)"
-                        $appServiceControlArray[9].Result = 0
-                    }
-                }
-                else {
-                    $tempAppServiceResults += "Informational: Only one worker instance is active for $($appservice.name), so the app service plan is not evaluated."
-                    $appServiceControlArray[9].Result = 0
-                    $appServiceControlArray[9].Weight = 0
+                    $appServiceControlArray[10].Result = 0
                 }
     
                 # Enable Health check to identify non-responsive workers
                 if ($appDetails.siteConfig.healthCheckPath) {
                     $tempAppServiceResults += "Good: Health check is enabled for App Service $($appservice.name)"
-                    $appServiceControlArray[10].Result = 100
+                    $appServiceControlArray[11].Result = 100
                 }
                 else {
                     $tempAppServiceResults += "Bad: Health check is NOT enabled for App Service $($appservice.name)"
-                    $appServiceControlArray[10].Result = 0
+                    $appServiceControlArray[11].Result = 0
                 }
     
                 # Enable Autoscale to ensure adequate resources are available to service requests
                 #$autoscale = az monitor autoscale list --resource-group $appservice.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
-                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.resourceGroup)/providers/Microsoft.Insights/autoscalesettings?api-version=2021-02-01"
+                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.resourceGroup)/providers/Microsoft.Insights/autoscalesettings?api-version=2024-03-01"
                 $autoscale = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($autoscale.targetResourceUri -match $appservice.id -and $autoscale.enabled -match 'True') {
                     $tempAppServiceResults += "Good: Autoscale is enabled for App Service $($appservice.name)"
-                    $appServiceControlArray[11].Result = 100
+                    $appServiceControlArray[12].Result = 100
                 }
                 else {
                     $tempAppServiceResults += "Bad: Autoscale is NOT enabled for App Service $($appservice.name)"
-                    $appServiceControlArray[11].Result = 0
-                }
-    
-                # Enable Local Cache to reduce dependencies on cluster file servers
-                if ($aseDetails.sku.capacity -eq 1) {
-                    if ($appSettings -match 'WEBSITE_LOCAL_CACHE_OPTION') {
-                        $tempAppServiceResults += "Good: Local Cache is enabled for App Service with single instance $($appservice.name)"
-                        $appServiceControlArray[12].Result = 100
-                    }
-                    else {
-                        $tempAppServiceResults += "Bad: Local Cache is NOT enabled for App Service with single instance $($appservice.name)"
-                        $appServiceControlArray[12].Result = 0
-                    }
-                }
-                else {
-                    if ($appSettings -match 'WEBSITE_LOCAL_CACHE_OPTION') {
-                        $tempAppServiceResults += "Bad: Local Cache is enabled for App Service with more than 1 instance $($appservice.name)"
-                        $appServiceControlArray[12].Result = 0
-                    }
-                    else {
-                        $tempAppServiceResults += "Good: Local Cache is not enabled for App Service with more than 1 instance $($appservice.name)"
-                        $appServiceControlArray[12].Result = 100
-                    }
+                    $appServiceControlArray[12].Result = 0
                 }
     
                 # Enable Application Insights Alerts to signal fault conditions
@@ -1593,7 +1606,7 @@ foreach ($sub in $AllSubscriptions) {
     
                 # Enable App Service Authentication
                 #$appAuth = az webapp auth show --ids $appservice.id 2> $null | ConvertFrom-Json -Depth 10
-                $uri = "https://management.azure.com$($appservice.id)/authsettings?api-version=2021-02-01"
+                $uri = "https://management.azure.com$($appservice.id)/config/authsettings/list?api-version=2023-12-01"
                 $appAuth = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($appAuth.enabled -match 'True') {
                     $tempAppServiceResults += "Good: App Service Authentication is enabled for App Service $($appservice.name)"
@@ -1616,7 +1629,7 @@ foreach ($sub in $AllSubscriptions) {
     
                 # Enable registration with Microsoft Entra ID
                 #$appIdentity = az webapp identity show --name $appservice.name --resource-group $appservice.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
-                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/identity?api-version=2021-02-01"
+                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/identity?api-version=2024-03-01"
                 $appIdentity = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($appIdentity.type -match 'SystemAssigned') {
                     $tempAppServiceResults += "Good: Registration with Microsoft Entra ID is enabled for App Service $($appservice.name)"
@@ -1629,7 +1642,7 @@ foreach ($sub in $AllSubscriptions) {
 
                 # Private Endpoint in Use
                 #$privateEndpoint = az network private-endpoint-connection list --name $appService.name --resource-group $appService.resourceGroup --type 'Microsoft.Web/Sites' 2> $null | ConvertFrom-Json -Depth 10
-                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/privateEndpointConnections?api-version=2021-02-01"
+                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/privateEndpointConnections?api-version=2024-03-01"
                 $privateEndpoint = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($privateEndpoint) {
                     $tempAppServiceResults += "Good: Private Endpoint is in use for App Service $($appservice.name)"
