@@ -1296,7 +1296,7 @@ foreach ($sub in $AllSubscriptions) {
                 # Set up backup and restore
                 #$backupConf = az webapp config backup show --resource-group $appservice.resourceGroup --webapp-name $appservice.name 2> $null | ConvertFrom-Json -Depth 10
                 $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.properties.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/config/backup/list?api-version=2023-12-01"
-                $backupConf = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
+                $backupConf = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Post).Content | ConvertFrom-Json -Depth 10)
                 if (!$backupConf) {
                     $tempAppServiceResults += "Bad: Backup and Restore is NOT configured for App Service $($appservice.name)"
                     $appServiceControlArray[3].Result = 0
@@ -1407,7 +1407,7 @@ foreach ($sub in $AllSubscriptions) {
                 # Use Run From Package to avoid deployment conflicts
                 #$appSettings = az webapp config appsettings list --name $appservice.name --resource-group $appservice.resourceGroup | ConvertFrom-Json -Depth 10
                 $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.properties.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/config/appsettings/list?api-version=2023-12-01"
-                $appSettings = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
+                $appSettings = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Post).Content | ConvertFrom-Json -Depth 10).properties
                 if (($appSettings -match 'WEBSITE_RUN_FROM_PACKAGE').slotSetting -match 'True') {
                     $tempAppServiceResults += "Good: Run From Package is used for App Service $($appservice.name)"
                     $appServiceControlArray[10].Result = 100
@@ -1605,7 +1605,7 @@ foreach ($sub in $AllSubscriptions) {
                 # Enable App Service Authentication
                 #$appAuth = az webapp auth show --ids $appservice.id 2> $null | ConvertFrom-Json -Depth 10
                 $uri = "https://management.azure.com$($appservice.id)/config/authsettings/list?api-version=2023-12-01"
-                $appAuth = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
+                $appAuth = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Post).Content | ConvertFrom-Json -Depth 10)
                 if ($appAuth.enabled -match 'True') {
                     $tempAppServiceResults += "Good: App Service Authentication is enabled for App Service $($appservice.name)"
                     $appServiceControlArray[25].Result = 100
@@ -1627,7 +1627,7 @@ foreach ($sub in $AllSubscriptions) {
     
                 # Enable registration with Microsoft Entra ID
                 #$appIdentity = az webapp identity show --name $appservice.name --resource-group $appservice.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
-                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.properties.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/identity?api-version=2024-03-01"
+                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.properties.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/identity?api-version=2023-12-01"
                 $appIdentity = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($appIdentity.type -match 'SystemAssigned') {
                     $tempAppServiceResults += "Good: Registration with Microsoft Entra ID is enabled for App Service $($appservice.name)"
@@ -1640,7 +1640,7 @@ foreach ($sub in $AllSubscriptions) {
 
                 # Private Endpoint in Use
                 #$privateEndpoint = az network private-endpoint-connection list --name $appService.name --resource-group $appService.resourceGroup --type 'Microsoft.Web/Sites' 2> $null | ConvertFrom-Json -Depth 10
-                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.properties.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/privateEndpointConnections?api-version=2024-03-01"
+                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.properties.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/privateEndpointConnections?api-version=2023-12-01"
                 $privateEndpoint = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($privateEndpoint) {
                     $tempAppServiceResults += "Good: Private Endpoint is in use for App Service $($appservice.name)"
