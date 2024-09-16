@@ -1296,7 +1296,12 @@ foreach ($sub in $AllSubscriptions) {
                 # Set up backup and restore
                 #$backupConf = az webapp config backup show --resource-group $appservice.resourceGroup --webapp-name $appservice.name 2> $null | ConvertFrom-Json -Depth 10
                 $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.properties.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/config/backup/list?api-version=2023-12-01"
-                $backupConf = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Post).Content | ConvertFrom-Json -Depth 10)
+                try {
+                    $backupConf = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Post).Content | ConvertFrom-Json -Depth 10)
+                }
+                catch{
+                    $backupConf = $null
+                }
                 if (!$backupConf) {
                     $tempAppServiceResults += "Bad: Backup and Restore is NOT configured for App Service $($appservice.name)"
                     $appServiceControlArray[3].Result = 0
@@ -1627,9 +1632,7 @@ foreach ($sub in $AllSubscriptions) {
     
                 # Enable registration with Microsoft Entra ID
                 #$appIdentity = az webapp identity show --name $appservice.name --resource-group $appservice.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
-                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.properties.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/identity?api-version=2023-12-01"
-                $appIdentity = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
-                if ($appIdentity.type -match 'SystemAssigned') {
+                if ($appService.identity.type -match 'SystemAssigned') {
                     $tempAppServiceResults += "Good: Registration with Microsoft Entra ID is enabled for App Service $($appservice.name)"
                     $appServiceControlArray[27].Result = 100
                 }
