@@ -1164,7 +1164,9 @@ foreach ($sub in $AllSubscriptions) {
 
     Write-Output "Checking App Services for subscription $($sub.name)..."
 
-    $AppServices = az webapp list 2> $null | ConvertFrom-Json -Depth 10
+    #$AppServices = az webapp list 2> $null | ConvertFrom-Json -Depth 10
+    $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Web/sites?api-version=2021-02-01"
+    $AppServices = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
         Write-Error "Unable to retrieve App Services for subscription $($sub.name)." -ErrorAction Continue
     }
@@ -1222,10 +1224,14 @@ foreach ($sub in $AllSubscriptions) {
         $appServiceJobs += Start-Threadjob -ScriptBlock {
 
             $appService = $using:appservice
+            $headers = $using:headers
+            $sub = $using:sub
             $tempAppServiceResults = @()
             $tempSkippedAppServices = 0
 
-            $appDetails = az webapp show --name $appservice.name --resource-group $appservice.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+            #$appDetails = az webapp show --name $appservice.name --resource-group $appservice.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+            $uri = "https://management.azure.com$($appservice.id)?api-version=2021-02-01"
+            $appDetails = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
             $appServiceControlArray = @()
 
             foreach ($control in $using:AppServiceControls) {
@@ -1290,7 +1296,9 @@ foreach ($sub in $AllSubscriptions) {
                 }
     
                 # Set up backup and restore
-                $backupConf = az webapp config backup show --resource-group $appservice.resourceGroup --webapp-name $appservice.name 2> $null | ConvertFrom-Json -Depth 10
+                #$backupConf = az webapp config backup show --resource-group $appservice.resourceGroup --webapp-name $appservice.name 2> $null | ConvertFrom-Json -Depth 10
+                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/config/backup?api-version=2021-02-01"
+                $backupConf = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if (!$backupConf) {
                     $tempAppServiceResults += "Bad: Backup and Restore is NOT configured for App Service $($appservice.name)"
                     $appServiceControlArray[3].Result = 0
@@ -1311,7 +1319,9 @@ foreach ($sub in $AllSubscriptions) {
                 }
     
                 # Ensure App Service Environments (ASE) are deployed in highly available configurations across Availability Zones
-                $aseDetails = az appservice plan show --id $appDetails.appServicePlanId | ConvertFrom-Json -Depth 10
+                #$aseDetails = az appservice plan show --id $appDetails.appServicePlanId | ConvertFrom-Json -Depth 10
+                $uri = "https://management.azure.com$($appDetails.appServicePlanId)?api-version=2021-02-01"
+                $aseDetails = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($aseDetails.properties.zoneRedundant -match 'True') {
                     $tempAppServiceResults += "Good: ASE is deployed in a highly available configuration across Availability Zones for App Service $($appservice.name)"
                     $appServiceControlArray[5].Result = 100
@@ -1332,7 +1342,9 @@ foreach ($sub in $AllSubscriptions) {
                 }
     
                 # Use Deployment slots for resilient code deployments
-                $deploymentSlots = az webapp deployment slot list --name $appservice.name --resource-group $appservice.resourceGroup --query '[*].name' | ConvertFrom-Json -Depth 10
+                #$deploymentSlots = az webapp deployment slot list --name $appservice.name --resource-group $appservice.resourceGroup --query '[*].name' | ConvertFrom-Json -Depth 10
+                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/slots?api-version=2021-02-01"
+                $deploymentSlots = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
                 if ($deploymentSlots) {
                     $tempAppServiceResults += "Good: Deployment slots are used for App Service $($appservice.name)"
                     $appServiceControlArray[7].Result = 100
@@ -1343,7 +1355,9 @@ foreach ($sub in $AllSubscriptions) {
                 }
     
                 # Use Run From Package to avoid deployment conflicts
-                $appSettings = az webapp config appsettings list --name $appservice.name --resource-group $appservice.resourceGroup | ConvertFrom-Json -Depth 10
+                #$appSettings = az webapp config appsettings list --name $appservice.name --resource-group $appservice.resourceGroup | ConvertFrom-Json -Depth 10
+                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/config/appsettings?api-version=2021-02-01"
+                $appSettings = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
                 if (($appSettings -match 'WEBSITE_RUN_FROM_PACKAGE').slotSetting -match 'True') {
                     $tempAppServiceResults += "Good: Run From Package is used for App Service $($appservice.name)"
                     $appServiceControlArray[8].Result = 100
@@ -1381,7 +1395,9 @@ foreach ($sub in $AllSubscriptions) {
                 }
     
                 # Enable Autoscale to ensure adequate resources are available to service requests
-                $autoscale = az monitor autoscale list --resource-group $appservice.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+                #$autoscale = az monitor autoscale list --resource-group $appservice.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.resourceGroup)/providers/Microsoft.Insights/autoscalesettings?api-version=2021-02-01"
+                $autoscale = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($autoscale.targetResourceUri -match $appservice.id -and $autoscale.enabled -match 'True') {
                     $tempAppServiceResults += "Good: Autoscale is enabled for App Service $($appservice.name)"
                     $appServiceControlArray[11].Result = 100
@@ -1576,7 +1592,9 @@ foreach ($sub in $AllSubscriptions) {
                 }
     
                 # Enable App Service Authentication
-                $appAuth = az webapp auth show --ids $appservice.id 2> $null | ConvertFrom-Json -Depth 10
+                #$appAuth = az webapp auth show --ids $appservice.id 2> $null | ConvertFrom-Json -Depth 10
+                $uri = "https://management.azure.com$($appservice.id)/authsettings?api-version=2021-02-01"
+                $appAuth = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($appAuth.enabled -match 'True') {
                     $tempAppServiceResults += "Good: App Service Authentication is enabled for App Service $($appservice.name)"
                     $appServiceControlArray[25].Result = 100
@@ -1597,7 +1615,9 @@ foreach ($sub in $AllSubscriptions) {
                 }
     
                 # Enable registration with Microsoft Entra ID
-                $appIdentity = az webapp identity show --name $appservice.name --resource-group $appservice.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+                #$appIdentity = az webapp identity show --name $appservice.name --resource-group $appservice.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/identity?api-version=2021-02-01"
+                $appIdentity = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($appIdentity.type -match 'SystemAssigned') {
                     $tempAppServiceResults += "Good: Registration with Microsoft Entra ID is enabled for App Service $($appservice.name)"
                     $appServiceControlArray[27].Result = 100
@@ -1608,7 +1628,9 @@ foreach ($sub in $AllSubscriptions) {
                 }
 
                 # Private Endpoint in Use
-                $privateEndpoint = az network private-endpoint-connection list --name $appService.name --resource-group $appService.resourceGroup --type 'Microsoft.Web/Sites' 2> $null | ConvertFrom-Json -Depth 10
+                #$privateEndpoint = az network private-endpoint-connection list --name $appService.name --resource-group $appService.resourceGroup --type 'Microsoft.Web/Sites' 2> $null | ConvertFrom-Json -Depth 10
+                $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.resourceGroup)/providers/Microsoft.Web/sites/$($appservice.name)/privateEndpointConnections?api-version=2021-02-01"
+                $privateEndpoint = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($privateEndpoint) {
                     $tempAppServiceResults += "Good: Private Endpoint is in use for App Service $($appservice.name)"
                     $appServiceControlArray[28].Result = 100
