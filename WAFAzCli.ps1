@@ -1439,7 +1439,7 @@ foreach ($sub in $AllSubscriptions) {
                     }
                 }
                 else {
-                    $tempAppServiceResults += "Informational: We have insufficient permissions on App Service $($appservice.name), so Run From Package status is not evaluated."
+                    $tempAppServiceResults += "Informational: We have insufficient permissions on App Service $($appservice.name) to evaluate Run From Package status."
                     $appServiceControlArray[10].Result = 0
                     $appServiceControlArray[10].Weight = 0
                 }
@@ -1479,7 +1479,7 @@ foreach ($sub in $AllSubscriptions) {
                     }
                 }
                 else {
-                    $tempAppServiceResults += "Informational: Application Insights Alerts are not enabled for App Service $($appservice.name)"
+                    $tempAppServiceResults += "Informational: We have insufficient permissions on App Service $($appservice.name), so Application Insights Alerts status is not evaluated."
                     $appServiceControlArray[13].Result = 0
                     $appServiceControlArray[13].Weight = 0
                 }
