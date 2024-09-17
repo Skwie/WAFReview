@@ -1306,6 +1306,7 @@ foreach ($sub in $AllSubscriptions) {
                 # Set up backup and restore
                 #$backupConf = az webapp config backup show --resource-group $appservice.resourceGroup --webapp-name $appservice.name 2> $null | ConvertFrom-Json -Depth 10
                 $uri = "https://management.azure.com$($appService.id)/config/backup/list?api-version=2023-12-01"
+                $noBackupPermissions = $null
                 try {
                     $backupConf = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Post).Content | ConvertFrom-Json -Depth 10)
                     $tempAppServiceResults += "Good: Backup and Restore is configured for App Service $($appservice.name)"
@@ -1319,6 +1320,7 @@ foreach ($sub in $AllSubscriptions) {
                     elseif ($_.Exception.Response.StatusCode -match 'Forbidden') {
                         $tempAppServiceResults += "Informational: We have insufficient permissions on App Service $($appservice.name) to evaluate Backup and Restore."
                         $appServiceControlArray[3].Result = 0
+                        $noBackupPermissions = $true
                     }
                 }
     
@@ -1580,6 +1582,11 @@ foreach ($sub in $AllSubscriptions) {
                         $tempAppServiceResults += "Bad: Backup retention period is NOT sufficient for App Service $($appservice.name)"
                         $appServiceControlArray[19].Result = 0
                     }
+                }
+                elseif ($noBackupPermissions) {
+                    $tempAppServiceResults += "Informational: We have insufficient permissions on App Service $($appservice.name) to evaluate Backup retention period."
+                    $appServiceControlArray[19].Result = 0
+                    $appServiceControlArray[19].Weight = 0
                 }
                 else {
                     $tempAppServiceResults += "Informational: Backup is not configured for App Service $($appservice.name)"
