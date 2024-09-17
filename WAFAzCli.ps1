@@ -1312,11 +1312,11 @@ foreach ($sub in $AllSubscriptions) {
                     $appServiceControlArray[3].Result = 100
                 }
                 catch {
-                    if ($_.Exception.Message.ToString() -contains 'The remote server returned an error: (404) Not Found.') {
+                    if ($_.Exception.Message.ToString() -like 'The remote server returned an error: (404) Not Found.') {
                         $tempAppServiceResults += "Bad: Backup and Restore is NOT configured for App Service $($appservice.name)"
                         $appServiceControlArray[3].Result = 0
                     }
-                    elseif ($_.Exception.Message.ToString() -contains 'The remote server returned an error: (403) Forbidden.') {
+                    elseif ($_.Exception.Message.ToString() -like 'The remote server returned an error: (403) Forbidden.') {
                         $tempAppServiceResults += "Informational: We have insufficient permissions on App Service $($appservice.name) to evaluate Backup and Restore."
                         $appServiceControlArray[3].Result = 0
                     }
@@ -1408,7 +1408,7 @@ foreach ($sub in $AllSubscriptions) {
                         }
                     }
                     else {
-                        $tempAppServiceResults += "Informational: We have insufficient permissions on App Service $($appservice.name), so Local Cache status is not evaluated."
+                        $tempAppServiceResults += "Informational: We have insufficient permissions on App Service $($appservice.name) to evaluate Local Cache status."
                         $appServiceControlArray[8].Result = 0
                         $appServiceControlArray[8].Weight = 0
                     }
@@ -1480,7 +1480,7 @@ foreach ($sub in $AllSubscriptions) {
                     }
                 }
                 else {
-                    $tempAppServiceResults += "Informational: We have insufficient permissions on App Service $($appservice.name), so Application Insights Alerts status is not evaluated."
+                    $tempAppServiceResults += "Informational: We have insufficient permissions on App Service $($appservice.name) to evaluate Application Insights Alerts status."
                     $appServiceControlArray[13].Result = 0
                     $appServiceControlArray[13].Weight = 0
                 }
