@@ -1753,12 +1753,16 @@ foreach ($sub in $AllSubscriptions) {
 
     $PostgreSQLServers = @()
 
-    $PostgreSQLServers += az postgres server list 2> $null | ConvertFrom-Json -Depth 10
+    #$PostgreSQLServers += az postgres server list 2> $null | ConvertFrom-Json -Depth 10
+    $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.DBforPostgreSQL/servers?api-version=2017-12-01"
+    $PostgreSQLServers += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
         Write-Error "Unable to retrieve PostgreSQL single servers for subscription $($sub.name)." -ErrorAction Continue
     }
 
-    $PostgreSQLServers += az postgres flexible-server list 2> $null | ConvertFrom-Json -Depth 10
+    #$PostgreSQLServers += az postgres flexible-server list 2> $null | ConvertFrom-Json -Depth 10
+    $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.DBforPostgreSQL/flexibleServers?api-version=2022-12-01"
+    $PostgreSQLServers += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
         Write-Error "Unable to retrieve PostgreSQL flexible servers for subscription $($sub.name)." -ErrorAction Continue
     }
@@ -1832,29 +1836,19 @@ foreach ($sub in $AllSubscriptions) {
 
             $serverStatus = $null
 
-            $serverDetails = az postgres server show --name $server.name --resource-group $server.resourceGroup 2>$null | ConvertFrom-Json -Depth 10
-            if ($?) {
+            if ($server.type -match 'Microsoft.DBforPostgreSQL/servers') {
                 $serverStatus = "single"
                 $tempPostgreSQLResults += ""
+                $tempPostgreSQLResults += "WARNING"
                 $tempPostgreSQLResults += "$($server.name) is a PostgreSQL single server. Single server is due to be deprecated in March 2025. Consider migrating to a flexible server."
             }
             else {
-                $serverDetails = az postgres flexible-server show --name $server.name --resource-group $server.resourceGroup 2>$null | ConvertFrom-Json -Depth 10
-                if ($?) {
-                    $serverStatus = "flexible"
-                }
-            }
-            
-            if (!$serverDetails) {
-                $tempPostgreSQLResults += ""
-                $tempPostgreSQLResults += "Unable to retrieve server details for PostgreSQL server $($server.name). This is most likely due to insufficient permissions. Skipping..."
-                $tempPostgreSQLResults += ""
-                Continue
+                $serverStatus = "flexible"
             }
 
             # Configure geo-redundancy backup
             if ($serverStatus -match 'single') {
-                if ($serverDetails.storageProfile.geoRedundantBackup -match 'Enabled') {
+                if ($server.storageProfile.geoRedundantBackup -match 'Enabled') {
                     $tempPostgreSQLResults += "Good: Geo-redundancy backup is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[0].Result = 100
                 }
@@ -1864,7 +1858,7 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match 'flexible') {
-                if ($serverDetails.backup.geoRedundantBackup -match 'Enabled') {
+                if ($server.backup.geoRedundantBackup -match 'Enabled') {
                     $tempPostgreSQLResults += "Good: Geo-redundancy backup is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[0].Result = 100
                 }
@@ -1875,7 +1869,9 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Monitor your server to ensure it's healthy and performing as expected
-            $serverMetrics = az monitor metrics alert list --resource $server.id --resource-group $server.resourceGroup 2>$null | ConvertFrom-Json -Depth 10
+            #$serverMetrics = az monitor metrics alert list --resource $server.id --resource-group $server.resourceGroup 2>$null | ConvertFrom-Json -Depth 10
+            $uri = "https://management.azure.com$($server.id)/providers/microsoft.insights/metricAlerts?api-version=2021-02-01"
+            $serverMetrics = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($serverMetrics) {
                 $tempPostgreSQLResults += "Good: Server is monitored for PostgreSQL server $($server.name)"
                 $postgreSQLControlArray[1].Result = 100
@@ -1887,7 +1883,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # SSL and enforce encryption to secure data in transit
             if ($serverStatus -match 'single') {
-                if ($serverDetails.sslEnforcement -match 'Enabled') {
+                if ($server.sslEnforcement -match 'Enabled') {
                     $tempPostgreSQLResults += "Good: SSL is enforced for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[2].Result = 100
                 }
@@ -1897,58 +1893,57 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match 'flexible') {
-                if ($serverDetails.dataEncryption) {
-                    $tempPostgreSQLResults += "Good: Data encryption is enforced for PostgreSQL server $($server.name)"
+                # SSL is enforced by default for flexible servers but can be disabled
+                $uri = "https://management.azure.com$($server.id)/configurations/require_secure_transport?api-version=2022-12-01"
+                $sslStatus = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties.value
+                if ($sslStatus -match 'On') {
+                    $tempPostgreSQLResults += "Good: SSL is enforced for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[2].Result = 100
                 }
                 else {
-                    $tempPostgreSQLResults += "Bad: Data encryption is NOT enforced for PostgreSQL server $($server.name)"
+                    $tempPostgreSQLResults += "Bad: SSL is NOT enforced for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[2].Result = 0
                 }
             }
 
             # Implement network security groups and firewalls to control access to your database
-            if ($serverStatus -match "single") {
-                $firewallRules = az postgres server firewall-rule list --server-name $server.name --resource-group $server.resourceGroup 2>$null | ConvertFrom-Json -Depth 10
-                if (!$?) {
-                    $tempPostgreSQLResults += "Informational: Private Access is enabled for PostgreSQL server $($server.name), so the firewall rules are not evaluated."
-                    $postgreSQLControlArray[3].Result = 0
-                    $postgreSQLControlArray[3].Weight = 0
-                }
-                elseif ($firewallRules) {
-                    $tempPostgreSQLResults += "Good: Firewall rules are implemented for PostgreSQL server $($server.name)"
-                    $postgreSQLControlArray[3].Result = 100
-                }
-                else {
-                    $tempPostgreSQLResults += "Bad: Firewall rules are NOT implemented for PostgreSQL server $($server.name)"
-                    $postgreSQLControlArray[3].Result = 0
-                }
+            #$firewallRules = az postgres server firewall-rule list --server-name $server.name --resource-group $server.resourceGroup 2>$null | ConvertFrom-Json -Depth 10
+            $uri = "https://management.azure.com$($server.id)/firewallRules?api-version=2022-12-01"
+            $firewallRules = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            if (!$?) {
+                $tempPostgreSQLResults += "Informational: Private Access is enabled for PostgreSQL server $($server.name), so the firewall rules are not evaluated."
+                $postgreSQLControlArray[3].Result = 0
+                $postgreSQLControlArray[3].Weight = 0
             }
-            if ($serverStatus -match "flexible") {
-                $firewallRules = az postgres flexible-server firewall-rule list --name $server.name --resource-group $server.resourceGroup 2>$null | ConvertFrom-Json -Depth 10
-                if (!$?) {
-                    $tempPostgreSQLResults += "Informational: Private Access is enabled for PostgreSQL server $($server.name), so the firewall rules are not evaluated."
-                    $postgreSQLControlArray[3].Result = 0
-                    $postgreSQLControlArray[3].Weight = 0
-                }
-                elseif ($firewallRules) {
-                    $tempPostgreSQLResults += "Good: Firewall rules are implemented for PostgreSQL server $($server.name)"
-                    $postgreSQLControlArray[3].Result = 100
-                }
-                else {
-                    $tempPostgreSQLResults += "Bad: Firewall rules are NOT implemented for PostgreSQL server $($server.name)"
-                    $postgreSQLControlArray[3].Result = 0
-                }
+            elseif ($firewallRules) {
+                $tempPostgreSQLResults += "Good: Firewall rules are implemented for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[3].Result = 100
+            }
+            else {
+                $tempPostgreSQLResults += "Bad: Firewall rules are NOT implemented for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[3].Result = 0
             }
 
             # Use Azure Active Directory for authentication and authorization to enhance identity management
-            if ($serverDetails.identity -match 'SystemAssigned') {
-                $tempPostgreSQLResults += "Good: Azure Active Directory is used for authentication and authorization for PostgreSQL server $($server.name)"
-                $postgreSQLControlArray[4].Result = 100
+            if ($serverStatus -match 'single') {
+                if ($server.identity.type -match 'SystemAssigned') {
+                    $tempPostgreSQLResults += "Good: Entra ID is used for authentication and authorization for PostgreSQL server $($server.name)"
+                    $postgreSQLControlArray[4].Result = 100
+                }
+                else {
+                    $tempPostgreSQLResults += "Bad: Entra ID is NOT used for authentication and authorization for PostgreSQL server $($server.name)"
+                    $postgreSQLControlArray[4].Result = 0
+                }
             }
-            else {
-                $tempPostgreSQLResults += "Bad: Azure Active Directory is NOT used for authentication and authorization for PostgreSQL server $($server.name)"
-                $postgreSQLControlArray[4].Result = 0
+            if ($serverStatus -match 'flexible') {
+                if (!$server.properties.administratorLogin) {
+                    $tempPostgreSQLResults += "Good: Entra ID is used for authentication and authorization for PostgreSQL server $($server.name)"
+                    $postgreSQLControlArray[4].Result = 100
+                }
+                else {
+                    $tempPostgreSQLResults += "Bad: Entra ID is NOT used for authentication and authorization for PostgreSQL server $($server.name)"
+                    $postgreSQLControlArray[4].Result = 0
+                }
             }
 
             # Deploy to the same region as the app
@@ -1963,7 +1958,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Set up automated backups and retention policies to maintain data availability and meet compliance requirements
             if ($serverStatus -match 'single') {
-                if ($serverDetails.storageProfile.backupRetentionDays -ge 7) {
+                if ($server.storageProfile.backupRetentionDays -ge 7) {
                     $tempPostgreSQLResults += "Good: Backup retention period is sufficient for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[6].Result = 100
                 }
@@ -1973,7 +1968,7 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match 'flexible') {
-                if ($serverDetails.backup.retentionDays -ge 7) {
+                if ($server.backup.retentionDays -ge 7) {
                     $tempPostgreSQLResults += "Good: Backup retention period is sufficient for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[6].Result = 100
                 }
@@ -1984,32 +1979,21 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Check for PostgreSQL Log Retention Period
-            if ($serverStatus -match 'single') {
-                $logretention = az postgres server configuration show --server-name $server.name --resource-group $server.resourceGroup --name log_retention_days
-                if ($logretention.value -ge 7) {
-                    $tempPostgreSQLResults += "Good: Log retention period is sufficient for PostgreSQL server $($server.name)"
-                    $postgreSQLControlArray[7].Result = 100
-                }
-                else {
-                    $tempPostgreSQLResults += "Bad: Log retention period is NOT sufficient for PostgreSQL server $($server.name)"
-                    $postgreSQLControlArray[7].Result = 0
-                }
+            #$logretention = az postgres server configuration show --server-name $server.name --resource-group $server.resourceGroup --name log_retention_days
+            $uri = "https://management.azure.com$($server.id)/configurations/logfiles.retention_days?api-version=2022-12-01"
+            $logretention = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties.value
+            if ($logretention.value -ge 7) {
+                $tempPostgreSQLResults += "Good: Log retention period is sufficient for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[7].Result = 100
             }
-            if ($serverStatus -match 'flexible') {
-                $logretention = az postgres flexible-server parameter show --server-name $server.name --resource-group $server.resourceGroup --name logfiles.retention_days
-                if ($logretention.value -ge 7) {
-                    $tempPostgreSQLResults += "Good: Log retention period is sufficient for PostgreSQL server $($server.name)"
-                    $postgreSQLControlArray[7].Result = 100
-                }
-                else {
-                    $tempPostgreSQLResults += "Bad: Log retention period is NOT sufficient for PostgreSQL server $($server.name)"
-                    $postgreSQLControlArray[7].Result = 0
-                }
+            else {
+                $tempPostgreSQLResults += "Bad: Log retention period is NOT sufficient for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[7].Result = 0
             }
 
             # Check for PostgreSQL Major Version
             if ($serverStatus -match 'single') {
-                if ($serverDetails.Version -match '11') {
+                if ($server.Version -match '11') {
                     $tempPostgreSQLResults += "Good: PostgreSQL server is using the latest major version for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[8].Result = 100
                 }
@@ -2019,7 +2003,7 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match 'flexible') {
-                if ($serverDetails.Version -match '16') {
+                if ($server.Version -match '16') {
                     $tempPostgreSQLResults += "Good: PostgreSQL server is using the latest major version for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[8].Result = 100
                 }
@@ -2031,7 +2015,9 @@ foreach ($sub in $AllSubscriptions) {
 
             # Disable 'Allow access to Azure services' for PostgreSQL database servers
             if ($serverStatus -match 'single') {
-                if ($serverDetails.allowAzureIps -match 'Disabled') {
+                $uri = "https://management.azure.com$($server.id)/firewallRules?api-version=2017-12-01"
+                $fwRules = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+                if ($fwRules.name -notmatch 'AllowAllWindowsAzureIps') {
                     $tempPostgreSQLResults += "Good: 'Allow access to Azure services' is disabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[9].Result = 100
                 }
@@ -2041,7 +2027,9 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match 'flexible') {
-                if ($serverDetails.allowAzureIps -match 'Disabled') {
+                $uri = "https://management.azure.com$($server.id)/firewallRules?api-version=2022-12-01"
+                $fwRules = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+                if ($fwRules.name -notmatch 'AllowAllWindowsAzureIps') {
                     $tempPostgreSQLResults += "Good: 'Allow access to Azure services' is disabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[9].Result = 100
                 }
@@ -2053,7 +2041,8 @@ foreach ($sub in $AllSubscriptions) {
 
             # Enable 'CONNECTION_THROTTLING' Parameter for PostgreSQL Servers
             if ($serverStatus -match 'single') {
-                $connectionThrottling = az postgres server configuration show --server-name $server.name --resource-group $server.resourceGroup --name connection_throttling
+                $uri = "https://management.azure.com$($server.id)/configurations/connection_throttling?api-version=2017-12-01"
+                $connectionThrottling = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($connectionThrottling.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'CONNECTION_THROTTLING' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[10].Result = 100
@@ -2064,7 +2053,7 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match 'flexible') {
-                $connectionThrottling = az postgres flexible-server parameter show --server-name $server.name --resource-group $server.resourceGroup --name connection_throttle.enable
+                $uri = "https://management.azure.com$($server.id)/configurations/connection_throttle.enable?api-version=2022-12-01"
                 if ($connectionThrottling.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'CONNECTION_THROTTLING' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[10].Result = 100
@@ -2077,7 +2066,8 @@ foreach ($sub in $AllSubscriptions) {
 
             # Enable 'LOG_CHECKPOINTS' Parameter for PostgreSQL Servers
             if ($serverStatus -match 'single') {
-                $logCheckpoints = az postgres server configuration show --server-name $server.name --resource-group $server.resourceGroup --name log_checkpoints
+                $uri = "https://management.azure.com$($server.id)/configurations/log_checkpoints?api-version=2017-12-01"
+                $logCheckpoints = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($logCheckpoints.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'LOG_CHECKPOINTS' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[11].Result = 100
@@ -2088,7 +2078,8 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match 'flexible') {
-                $logCheckpoints = az postgres flexible-server parameter show --server-name $server.name --resource-group $server.resourceGroup --name log_checkpoints
+                $uri = "https://management.azure.com$($server.id)/configurations/log_checkpoints?api-version=2022-12-01"
+                $logCheckpoints = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($logCheckpoints.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'LOG_CHECKPOINTS' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[11].Result = 100
@@ -2101,7 +2092,8 @@ foreach ($sub in $AllSubscriptions) {
 
             # Enable 'LOG_CONNECTIONS' Parameter for PostgreSQL Servers
             if ($serverStatus -match 'single') {
-                $logConnections = az postgres server configuration show --server-name $server.name --resource-group $server.resourceGroup --name log_connections
+                $uri = "https://management.azure.com$($server.id)/configurations/log_connections?api-version=2017-12-01"
+                $logConnections = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($logConnections.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'LOG_CONNECTIONS' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[12].Result = 100
@@ -2112,7 +2104,8 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match 'flexible') {
-                $logConnections = az postgres flexible-server parameter show --server-name $server.name --resource-group $server.resourceGroup --name log_connections
+                $uri = "https://management.azure.com$($server.id)/configurations/log_connections?api-version=2022-12-01"
+                $logConnections = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($logConnections.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'LOG_CONNECTIONS' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[12].Result = 100
@@ -2125,7 +2118,9 @@ foreach ($sub in $AllSubscriptions) {
 
             # Enable 'LOG_DISCONNECTIONS' Parameter for PostgreSQL Servers
             if ($serverStatus -match 'single') {
-                $logDisconnections = az postgres server configuration show --server-name $server.name --resource-group $server.resourceGroup --name log_disconnections
+                #$logDisconnections = az postgres server configuration show --server-name $server.name --resource-group $server.resourceGroup --name log_disconnections
+                $uri = "https://management.azure.com$($server.id)/configurations/log_disconnections?api-version=2017-12-01"
+                $logDisconnections = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($logDisconnections.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'LOG_DISCONNECTIONS' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[13].Result = 100
@@ -2136,7 +2131,9 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match 'flexible') {
-                $logDisconnections = az postgres flexible-server parameter show --server-name $server.name --resource-group $server.resourceGroup --name log_disconnections
+                #$logDisconnections = az postgres flexible-server parameter show --server-name $server.name --resource-group $server.resourceGroup --name log_disconnections
+                $uri = "https://management.azure.com$($server.id)/configurations/log_disconnections?api-version=2022-12-01"
+                $logDisconnections = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($logDisconnections.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'LOG_DISCONNECTIONS' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[13].Result = 100
@@ -2149,7 +2146,9 @@ foreach ($sub in $AllSubscriptions) {
 
             # Enable 'LOG_DURATION' Parameter for PostgreSQL Servers
             if ($serverStatus -match 'single') {
-                $logDuration = az postgres server configuration show --server-name $server.name --resource-group $server.resourceGroup --name log_duration
+                #$logDuration = az postgres server configuration show --server-name $server.name --resource-group $server.resourceGroup --name log_duration
+                $uri = "https://management.azure.com$($server.id)/configurations/log_duration?api-version=2017-12-01"
+                $logDuration = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($logDuration.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'LOG_DURATION' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[14].Result = 100
@@ -2160,7 +2159,9 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match 'flexible') {
-                $logDuration = az postgres flexible-server parameter show --server-name $server.name --resource-group $server.resourceGroup --name log_duration
+                #$logDuration = az postgres flexible-server parameter show --server-name $server.name --resource-group $server.resourceGroup --name log_duration
+                $uri = "https://management.azure.com$($server.id)/configurations/log_duration?api-version=2022-12-01"
+                $logDuration = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($logDuration.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'LOG_DURATION' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[14].Result = 100
@@ -2173,7 +2174,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Enable Storage Auto-Growth
             if ($serverStatus -match 'single') {
-                if ($serverDetails.storageProfile.storageAutogrow -match 'Enabled') {
+                if ($server.storageProfile.storageAutogrow -match 'Enabled') {
                     $tempPostgreSQLResults += "Good: Storage Auto-Growth is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[15].Result = 100
                 }
@@ -2183,7 +2184,7 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match 'flexible') {
-                if ($serverDetails.storage.autoGrow -match 'Enabled') {
+                if ($server.storage.autoGrow -match 'Enabled') {
                     $tempPostgreSQLResults += "Good: Storage Auto-Growth is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[15].Result = 100
                 }
