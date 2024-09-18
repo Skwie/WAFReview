@@ -1872,7 +1872,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Monitor your server to ensure it's healthy and performing as expected
             #$serverMetrics = az monitor metrics alert list --resource $server.id --resource-group $server.resourceGroup 2>$null | ConvertFrom-Json -Depth 10
-            $uri = "https://management.azure.com$($server.id)/providers/microsoft.insights/metricAlerts?api-version=2021-02-01"
+            $uri = "https://management.azure.com$($server.id)/providers/microsoft.insights/metricAlerts?api-version=2022-12-01"
             $serverMetrics = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($serverMetrics) {
                 $tempPostgreSQLResults += "Good: Server is monitored for PostgreSQL server $($server.name)"
