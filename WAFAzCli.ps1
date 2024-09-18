@@ -1806,6 +1806,8 @@ foreach ($sub in $AllSubscriptions) {
         $postgreSQLJobs += Start-Threadjob -ScriptBlock {
 
             $server = $using:server
+            $headers = $using:headers
+            $sub = $using:sub
             $tempPostgreSQLResults = @()
 
             $postgreSQLControlArray = @()
