@@ -2426,12 +2426,12 @@ foreach ($sub in $AllSubscriptions) {
                     $cosmosDBControlArray[6].Weight = 0
                 }
             }
-            elseif ($cosmosAcct.capabilities.name -match 'EnableTable') {
+            elseif ($cosmosAcct.properties.capabilities.name -match 'EnableTable') {
                 $tempCosmosDBResults += "Informational: Time-to-live (TTL) is not supported for Table API for CosmosDB account $($cosmosAcct.name)"
                 $cosmosDBControlArray[6].Result = 100
                 $cosmosDBControlArray[6].Weight = 0
             }
-            elseif ($cosmosAcct.capabilities.name -match 'EnableMongo') {
+            elseif ($cosmosAcct.properties.capabilities.name -match 'EnableMongo') {
                 $tempCosmosDBResults += "Informational: Time-to-live (TTL) is not supported for MongoDB API for CosmosDB account $($cosmosAcct.name)"
                 $cosmosDBControlArray[6].Result = 100
                 $cosmosDBControlArray[6].Weight = 0
