@@ -2487,7 +2487,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Restrict default network access
-            if ($cosmosAcct.publicNetworkAccess -match 'Disabled') {
+            if ($cosmosAcct.properties.publicNetworkAccess -match 'Disabled') {
                 $tempCosmosDBResults += "Good: Default network access is restricted for CosmosDB account $($cosmosAcct.name)"
                 $cosmosDBControlArray[9].Result = 100
             }
