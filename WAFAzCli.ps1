@@ -3,7 +3,7 @@
   Performs an Azure Well-Architected Framework assessment for one or more subscriptions.
 
 .DESCRIPTION
-  This script makes an inventory of specific or all fscp 3.0 subscriptions, and runs AZ CLI commands against those subscriptions to determine if resources in those subscriptions are in line with the Microsoft Azure Well-Architected Framework.
+  This script makes an inventory of specific or all fscp 3.0 subscriptions, and runs Azure REST API calls against those subscriptions to determine if resources in those subscriptions are in line with the Microsoft Azure Well-Architected Framework.
 
 .PARAMETER <SubscriptionIds>
   Optional. An array of IDs for the subscriptions that you want to assess. If no SubscriptionId is entered, the script runs for all subscriptions.
@@ -23,7 +23,7 @@
   Version:        0.8.3
   Author:         Jordy Groenewoud
   Creation Date:  27/03/2024
-  Last Updated:   05/09/2024
+  Last Updated:   23/09/2024
   
 .EXAMPLE
   .\WAFAzCli.ps1 -Filter "-p-lz"
@@ -2239,7 +2239,9 @@ foreach ($sub in $AllSubscriptions) {
 
     $CosmosDBAccounts = @()
 
-    $CosmosDBAccounts += az cosmosdb list 2> $null | ConvertFrom-Json -Depth 10
+    #$CosmosDBAccounts += az cosmosdb list 2> $null | ConvertFrom-Json -Depth 10
+    $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.DocumentDB/databaseAccounts?api-version=2021-04-15"
+    $CosmosDBAccounts += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
         Write-Error "Unable to retrieve CosmosDB accounts for subscription $($sub.name)." -ErrorAction Continue
     }
@@ -2277,6 +2279,8 @@ foreach ($sub in $AllSubscriptions) {
         $cosmosDBJobs += Start-Threadjob -ScriptBlock {
             
             $cosmosAcct = $using:cosmosAcct
+            $headers = $using:headers
+            $sub = $using:sub
             $tempCosmosDBResults = @()
 
             $cosmosDBControlArray = @()
@@ -2346,7 +2350,9 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Use role-based access control to limit control-plane access to specific identities and groups and within the scope of well-defined assignments
-            $roleAssignments = az cosmosdb sql role assignment list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup 2> $null
+            #$roleAssignments = az cosmosdb sql role assignment list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup 2> $null
+            $uri = "https://management.azure.com$($cosmosAcct.id)/roleAssignments?api-version=2022-12-01"
+            $roleAssignments = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($?) {
                 if ($roleAssignments) {
                     $tempCosmosDBResults += "Good: Role-based access control is used for CosmosDB account $($cosmosAcct.name)"
@@ -2364,7 +2370,9 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Enable Microsoft Defender for Azure Cosmos DB
-            $defenderStatus = az security atp cosmosdb show --cosmosdb-account $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup | ConvertFrom-Json -Depth 10
+            #$defenderStatus = az security atp cosmosdb show --cosmosdb-account $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup | ConvertFrom-Json -Depth 10
+            $uri = "https://management.azure.com$($cosmosAcct.id)/providers/Microsoft.Security/advancedThreatProtectionSettings/default?api-version=2021-01-01"
+            $defenderStatus = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
             if ($defenderStatus.isEnabled) {
                 $tempCosmosDBResults += "Good: Microsoft Defender is enabled for CosmosDB account $($cosmosAcct.name)"
                 $cosmosDBControlArray[5].Result = 100
@@ -2389,10 +2397,16 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             elseif ($cosmosAcct.capabilities.name -match 'EnableCassandra') {
-                $cassandraDB = az cosmosdb cassandra keyspace list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup | ConvertFrom-Json -Depth 10
-                $cassandraTable = az cosmosdb cassandra table list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup --keyspace-name $cassandraDB[0].name | ConvertFrom-Json -Depth 10
+                #$cassandraDB = az cosmosdb cassandra keyspace list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup | ConvertFrom-Json -Depth 10
+                $uri = "https://management.azure.com$($cosmosAcct.id)/cassandraKeyspaces?api-version=2022-12-01"
+                $cassandraDB = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+                #$cassandraTable = az cosmosdb cassandra table list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup --keyspace-name $cassandraDB[0].name | ConvertFrom-Json -Depth 10
+                $uri = "https://management.azure.com$($cosmosAcct.id)/cassandraKeyspaces/$($cassandraDB[0].id)/cassandraTables?api-version=2022-12-01"
+                $cassandraTable = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
                 if ($cassandraTable.length -ge 1) {
-                    $ttl = az cosmosdb cassandra table show --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup --keyspace-name $cassandraDB[0].name --name $cassandraTable[0].name | ConvertFrom-Json -Depth 10
+                    #$ttl = az cosmosdb cassandra table show --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup --keyspace-name $cassandraDB[0].name --name $cassandraTable[0].name | ConvertFrom-Json -Depth 10
+                    $uri = "https://management.azure.com$($cosmosAcct.id)/cassandraKeyspaces/$($cassandraDB[0].id)/cassandraTables/$($cassandraTable[0].id)?api-version=2022-12-01"
+                    $ttl = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
                     if ($ttl.defaultTtl -ge 1) {
                         $tempCosmosDBResults += "Good: Time-to-live (TTL) is implemented for CosmosDB account $($cosmosAcct.name)"
                         $cosmosDBControlArray[6].Result = 100
@@ -2419,10 +2433,16 @@ foreach ($sub in $AllSubscriptions) {
                 $cosmosDBControlArray[6].Weight = 0
             }
             else {
-                $sqlDB = az cosmosdb sql database list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup | ConvertFrom-Json -Depth 10
-                $sqlContainer = az cosmosdb sql container list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup --db-name $sqlDB[0].name | ConvertFrom-Json -Depth 10
+                #$sqlDB = az cosmosdb sql database list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup | ConvertFrom-Json -Depth 10
+                $uri = "https://management.azure.com$($cosmosAcct.id)/sqlDatabases?api-version=2022-12-01"
+                $sqlDB = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+                #$sqlContainer = az cosmosdb sql container list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup --db-name $sqlDB[0].name | ConvertFrom-Json -Depth 10
+                $uri = "https://management.azure.com$($cosmosAcct.id)/sqlDatabases/$($sqlDB[0].id)/sqlContainers?api-version=2022-12-01"
+                $sqlContainer = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
                 if ($sqlContainer.length -ge 1) {
-                    $ttl = az cosmosdb sql container show --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup --db-name $sqlDB[0].name --name $sqlContainer[0].name | ConvertFrom-Json -Depth 10
+                    #$ttl = az cosmosdb sql container show --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup --db-name $sqlDB[0].name --name $sqlContainer[0].name | ConvertFrom-Json -Depth 10
+                    $uri = "https://management.azure.com$($cosmosAcct.id)/sqlDatabases/$($sqlDB[0].id)/sqlContainers/$($sqlContainer[0].id)?api-version=2022-12-01"
+                    $ttl = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
                     if ($ttl.defaultTtl -ge 1) {
                         $tempCosmosDBResults += "Good: Time-to-live (TTL) is implemented for CosmosDB account $($cosmosAcct.name)"
                         $cosmosDBControlArray[6].Result = 100
@@ -2440,7 +2460,9 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Create alerts associated with host machine resources (Currently binary yes/no check, needs to be updated to check for specific alerts)
-            $hostAlerts = az monitor metrics alert list --resource $cosmosAcct.id --resource-group $cosmosAcct.resourceGroup
+            #$hostAlerts = az monitor metrics alert list --resource $cosmosAcct.id --resource-group $cosmosAcct.resourceGroup
+            $uri = "https://management.azure.com$($cosmosAcct.id)/providers/Microsoft.Insights/metricAlerts?api-version=2018-03-01"
+            $hostAlerts = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($hostAlerts) {
                 $tempCosmosDBResults += "Good: Alerts are created for host machine resources for CosmosDB account $($cosmosAcct.name)"
                 $cosmosDBControlArray[7].Result = 100
@@ -2451,7 +2473,9 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Create alerts for throughput throttling (Currently binary yes/no check, needs to be updated to check for specific alerts)
-            $throttleAlerts = az monitor metrics alert list --resource $cosmosAcct.id --resource-group $cosmosAcct.resourceGroup
+            #$throttleAlerts = az monitor metrics alert list --resource $cosmosAcct.id --resource-group $cosmosAcct.resourceGroup
+            $uri = "https://management.azure.com$($cosmosAcct.id)/providers/Microsoft.Insights/metricAlerts?api-version=2018-03-01"
+            $throttleAlerts = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($throttleAlerts) {
                 $tempCosmosDBResults += "Good: Alerts are created for throughput throttling for CosmosDB account $($cosmosAcct.name)"
                 $cosmosDBControlArray[8].Result = 100
