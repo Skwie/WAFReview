@@ -3,18 +3,15 @@ Automated assessment for the Azure WAF
 
 ## WAFAzCli.ps1
 
-This script is a tool built in Powershell for performing automated assessments of the Azure Well-Architected Framework (WAF). It leverages the Azure CLI module to interact with the Azure platform.
+This script is a tool built in Powershell for performing automated assessments of the Azure Well-Architected Framework (WAF). It leverages the Azure REST API to interact with the Azure platform.
 This tool is currently still a Work in Progress (WIP).
 
 ### Prerequisites
 
 Before running this script, ensure that you have the following prerequisites:
 
-- Az module installed. You can install it by running the following command:
-
-    ```powershell
-    Install-Module -Name Az
-    ```
+- Powershell 7
+  This script does not function properly with Powershell 5.
 
 ### Usage
 
