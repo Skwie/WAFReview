@@ -12,6 +12,12 @@ Before running this script, ensure that you have the following prerequisites:
 
 - Powershell 7
   This script does not function properly with Powershell 5.
+- Az module
+  The Az module is required for authentication to Azure.
+  It can be installed with:
+    ```
+    Install-Module Az
+    ```
 
 ### Usage
 
