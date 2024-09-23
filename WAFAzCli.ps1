@@ -2351,7 +2351,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Use role-based access control to limit control-plane access to specific identities and groups and within the scope of well-defined assignments
             #$roleAssignments = az cosmosdb sql role assignment list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup 2> $null
-            $uri = "https://management.azure.com$($cosmosAcct.id)/roleAssignments?api-version=2022-12-01"
+            $uri = "https://management.azure.com$($cosmosAcct.id)/roleAssignments?api-version=2024-08-15"
             $roleAssignments = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($?) {
                 if ($roleAssignments) {
@@ -2371,7 +2371,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Enable Microsoft Defender for Azure Cosmos DB
             #$defenderStatus = az security atp cosmosdb show --cosmosdb-account $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup | ConvertFrom-Json -Depth 10
-            $uri = "https://management.azure.com$($cosmosAcct.id)/providers/Microsoft.Security/advancedThreatProtectionSettings/default?api-version=2021-01-01"
+            $uri = "https://management.azure.com$($cosmosAcct.id)/providers/Microsoft.Security/advancedThreatProtectionSettings/default?api-version=2019-01-01"
             $defenderStatus = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
             if ($defenderStatus.isEnabled) {
                 $tempCosmosDBResults += "Good: Microsoft Defender is enabled for CosmosDB account $($cosmosAcct.name)"
@@ -2385,8 +2385,12 @@ foreach ($sub in $AllSubscriptions) {
             # Implement time-to-live (TTL) to remove unused items
             # Check the type of db; Gremlin, Cassandra and SQL support TTL
             if ($cosmosAcct.capabilities.name -match 'EnableGremlin' ) {
-                $gremlinDB = az cosmosdb gremlin database list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup | ConvertFrom-Json -Depth 10
-                $ttl = az cosmosdb gremlin database show --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup --name $gremlinDB[0].name | ConvertFrom-Json -Depth 10
+                #$gremlinDB = az cosmosdb gremlin database list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup | ConvertFrom-Json -Depth 10
+                $uri = "https://management.azure.com$($cosmosAcct.id)/gremlinDatabases?api-version=2022-12-01"
+                $gremlinDB = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+                #$ttl = az cosmosdb gremlin database show --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup --name $gremlinDB[0].name | ConvertFrom-Json -Depth 10
+                $uri = "https://management.azure.com$($cosmosAcct.id)/gremlinDatabases/$($gremlinDB[0].id)?api-version=2022-12-01"
+                $ttl = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
                 if ($ttl.defaultTtl -ge 1) {
                     $tempCosmosDBResults += "Good: Time-to-live (TTL) is implemented for CosmosDB account $($cosmosAcct.name)"
                     $cosmosDBControlArray[6].Result = 100
@@ -2434,10 +2438,10 @@ foreach ($sub in $AllSubscriptions) {
             }
             else {
                 #$sqlDB = az cosmosdb sql database list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup | ConvertFrom-Json -Depth 10
-                $uri = "https://management.azure.com$($cosmosAcct.id)/sqlDatabases?api-version=2022-12-01"
+                $uri = "https://management.azure.com$($cosmosAcct.id)/sqlDatabases?api-version=2024-08-15"
                 $sqlDB = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
                 #$sqlContainer = az cosmosdb sql container list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup --db-name $sqlDB[0].name | ConvertFrom-Json -Depth 10
-                $uri = "https://management.azure.com$($cosmosAcct.id)/sqlDatabases/$($sqlDB[0].id)/sqlContainers?api-version=2022-12-01"
+                $uri = "https://management.azure.com$($cosmosAcct.id)/sqlDatabases/$($sqlDB[0].id)/sqlContainers?api-version=2024-08-15"
                 $sqlContainer = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
                 if ($sqlContainer.length -ge 1) {
                     #$ttl = az cosmosdb sql container show --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup --db-name $sqlDB[0].name --name $sqlContainer[0].name | ConvertFrom-Json -Depth 10
@@ -2461,7 +2465,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Create alerts associated with host machine resources (Currently binary yes/no check, needs to be updated to check for specific alerts)
             #$hostAlerts = az monitor metrics alert list --resource $cosmosAcct.id --resource-group $cosmosAcct.resourceGroup
-            $uri = "https://management.azure.com$($cosmosAcct.id)/providers/Microsoft.Insights/metricAlerts?api-version=2018-03-01"
+            $uri = "https://management.azure.com$($cosmosAcct.id)/providers/Microsoft.Insights/metricAlerts?api-version=2024-08-15"
             $hostAlerts = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($hostAlerts) {
                 $tempCosmosDBResults += "Good: Alerts are created for host machine resources for CosmosDB account $($cosmosAcct.name)"
@@ -2474,7 +2478,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Create alerts for throughput throttling (Currently binary yes/no check, needs to be updated to check for specific alerts)
             #$throttleAlerts = az monitor metrics alert list --resource $cosmosAcct.id --resource-group $cosmosAcct.resourceGroup
-            $uri = "https://management.azure.com$($cosmosAcct.id)/providers/Microsoft.Insights/metricAlerts?api-version=2018-03-01"
+            $uri = "https://management.azure.com$($cosmosAcct.id)/providers/Microsoft.Insights/metricAlerts?api-version=2024-08-15"
             $throttleAlerts = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($throttleAlerts) {
                 $tempCosmosDBResults += "Good: Alerts are created for throughput throttling for CosmosDB account $($cosmosAcct.name)"
