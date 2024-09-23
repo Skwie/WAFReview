@@ -2351,7 +2351,6 @@ foreach ($sub in $AllSubscriptions) {
 
             # Use role-based access control to limit control-plane access to specific identities and groups and within the scope of well-defined assignments
             #$roleAssignments = az cosmosdb sql role assignment list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup 2> $null
-
             $uri = "https://management.azure.com$($cosmosAcct.id)/providers/Microsoft.Authorization/roleAssignments?api-version=2022-04-01"
             $roleAssignments = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($?) {
@@ -2442,11 +2441,10 @@ foreach ($sub in $AllSubscriptions) {
                 $uri = "https://management.azure.com$($cosmosAcct.id)/sqlDatabases?api-version=2024-08-15"
                 $sqlDB = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
                 #$sqlContainer = az cosmosdb sql container list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup --db-name $sqlDB[0].name | ConvertFrom-Json -Depth 10
-
                 $uri = "https://management.azure.com$($sqlDB[0].id)/containers?api-version=2024-08-15"
                 $sqlContainer = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
                 if ($sqlContainer.length -ge 1) {
-                    if ($sqlContainer.properties.defaultTtl -ge 1) {
+                    if ($sqlContainer.properties.resource.defaultTtl -ge 1) {
                         $tempCosmosDBResults += "Good: Time-to-live (TTL) is implemented for CosmosDB account $($cosmosAcct.name)"
                         $cosmosDBControlArray[6].Result = 100
                     }
@@ -2477,7 +2475,6 @@ foreach ($sub in $AllSubscriptions) {
 
             # Create alerts for throughput throttling (Currently binary yes/no check, needs to be updated to check for specific alerts)
             #$throttleAlerts = az monitor metrics alert list --resource $cosmosAcct.id --resource-group $cosmosAcct.resourceGroup
-
             $uri = "https://management.azure.com/subscriptions/$($cosmosAcct.id.split("/")[2])/resourceGroups/$($cosmosAcct.id.split("/")[4])/providers/Microsoft.Insights/metricAlerts?api-version=2018-03-01"
             $throttleAlerts = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($throttleAlerts) {
