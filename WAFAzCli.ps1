@@ -2539,7 +2539,9 @@ foreach ($sub in $AllSubscriptions) {
 
     $AKSClusters = @()
 
-    $AKSClusters += az aks list 2> $null | ConvertFrom-Json -Depth 10
+    #$AKSClusters += az aks list 2> $null | ConvertFrom-Json -Depth 10
+    $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.ContainerService/managedClusters?api-version=2021-08-01"
+    $AKSClusters += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
         Write-Error "Unable to retrieve AKS clusters for subscription $($sub.name)." -
         ErrorAction Continue
@@ -2585,11 +2587,15 @@ foreach ($sub in $AllSubscriptions) {
         $aksJobs += Start-Threadjob -ScriptBlock {
             
             $aksCluster = $using:aksCluster
+            $headers = $using:headers
+            $sub = $using:sub
             $tempAKSResults = @()
 
             $aksControlArray = @()
 
-            $clusterDetails = az aks show --name $aksCluster.name --resource-group $aksCluster.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+            #$clusterDetails = az aks show --name $aksCluster.name --resource-group $aksCluster.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+            $uri = "https://management.azure.com$($aksCluster.id)?api-version=2021-08-01"
+            $clusterDetails = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
 
             foreach ($control in $using:AKSControls) {
                 $aksCheck = $control.Split(';')
@@ -2637,10 +2643,14 @@ foreach ($sub in $AllSubscriptions) {
 
             # Authenticate with Microsoft Entra ID to Azure Container Registry
             $acrEnabled = $false
-            $acrs = az acr list 2> $null | ConvertFrom-Json -Depth 10
+            #$acrs = az acr list 2> $null | ConvertFrom-Json -Depth 10
+            $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.ContainerRegistry/registries?api-version=2021-06-01"
+            $acrs = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($acrs) {
                 foreach ($acr in $acrs) {
-                    az aks check-acr --name $aksCluster.name --resource-group $aksCluster.resourceGroup --acr $acr.name 2> $null
+                    #az aks check-acr --name $aksCluster.name --resource-group $aksCluster.resourceGroup --acr $acr.name 2> $null
+                    $uri = "https://management.azure.com$($aksCluster.id)/checkAcr?acrName=$($acr.name)&api-version=2021-08-01"
+                    $acrCheck = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                     if ($?) {
                         $acrEnabled = $true
                         $tempAKSResults += "Good: Microsoft Entra ID is used to authenticate with Azure Container Registry for AKS cluster $($aksCluster.name)"
@@ -2755,7 +2765,9 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Ensure that AKS clusters are using the latest available version of Kubernetes software
-            $aksVersionStatus = az aks get-upgrades --name $aksCluster.name --resource-group $aksCluster.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+            #$aksVersionStatus = az aks get-upgrades --name $aksCluster.name --resource-group $aksCluster.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+            $uri = "https://management.azure.com$($aksCluster.id)/upgrades?api-version=2021-08-01"
+            $aksVersionStatus = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
             $latestVersion = $true
             foreach ($upgrade in $aksVersionStatus.controlPlaneProfile.upgrades) {
                 if ($upgrade.kubernetesVersion -gt $aksVersionStatus.controlPlaneProfile.kubernetesVersion) {
@@ -2783,7 +2795,9 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Ensure that AKS clusters are configured to use the Network Contributor role
-            $networkRole = az role assignment list --scope $aksCluster.id --role "Network Contributor" 2> $null
+            #$networkRole = az role assignment list --scope $aksCluster.id --role "Network Contributor" 2> $null
+            $uri = "https://management.azure.com$($aksCluster.id)/providers/Microsoft.Authorization/roleAssignments?api-version=2022-04-01"
+            $networkRole = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($networkRole) {
                 $tempAKSResults += "Good: AKS cluster is configured to use the Network Contributor role for AKS cluster $($aksCluster.name)"
                 $aksControlArray[15].Result = 100
