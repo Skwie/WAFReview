@@ -2947,19 +2947,22 @@ foreach ($sub in $AllSubscriptions) {
             # Ensure that Azure OpenAI service instances don't have administrative privileges
             $openAIControlArray[3].Result = 100
             #$openAIIdentity = az cognitiveservices account identity show --name $openAIResource.name --resource-group $openAIResource.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
-            if ($openAIDetails.identity.type -match "SystemAssigned") {
-                Continue
-            }
-            else {
-                #$roles = az role assignment list --assignee $identity.principalId --all 2> $null | ConvertFrom-Json -Depth 10
-                $uri = "https://management.azure.com/providers/Microsoft.Authorization/roleAssignments?api-version=2021-04-01&$filter={principalId eq '$($openAIDetails.identity.principalId)'}"
-                $roles = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
-                if ($roles.roleDefinitionName -eq "Owner" -or $roles.roleDefinitionName -eq "Contributor" -or $roles.roleDefinitionName -eq "User Access Administrator" -or $roles.roleDefinitionName -eq "Role Based Access Control Administrator") {
-                    $openAIControlArray[3].Result = 0
-                }
-                else {
+            foreach ($identity in $openAIDetails.identity) {
+                if ($identity.type -match "SystemAssigned") {
                     Continue
                 }
+                else {
+                    #$roles = az role assignment list --assignee $identity.principalId --all 2> $null | ConvertFrom-Json -Depth 10
+                    $uri = "https://management.azure.com/providers/Microsoft.Authorization/roleAssignments?api-version=2021-04-01&$filter={principalId eq '$($identity.principalId)'}"
+                    $roles = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+                    if ($roles.roleDefinitionName -eq "Owner" -or $roles.roleDefinitionName -eq "Contributor" -or $roles.roleDefinitionName -eq "User Access Administrator" -or $roles.roleDefinitionName -eq "Role Based Access Control Administrator") {
+                        $openAIControlArray[3].Result = 0
+                    }
+                    else {
+                        Continue
+                    }
+                }
+
             }
 
             if ($openAIControlArray[3].Result -eq 100) {
