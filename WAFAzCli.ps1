@@ -2933,7 +2933,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Enable and configure Diagnostics for the Azure OpenAI Service
             #$openAIDiagnostics = az monitor diagnostic-settings list --resource $openAIResource.id 2> $null | ConvertFrom-Json -Depth 10
-            $uri = "https://management.azure.com$($openAIResource.id)/providers/microsoft.insights/diagnosticSettings?api-version=2016-09-01"
+            $uri = "https://management.azure.com$($openAIResource.id)/providers/microsoft.insights/diagnosticSettings?api-version=2021-05-01-preview"
             $openAIDiagnostics = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($openAIDiagnostics.type -match "Microsoft.Insights/diagnosticSettings") {
                 $tempOpenAIResults += "Good: Diagnostics are enabled and configured for the Azure OpenAI Service for OpenAI resource $($openAIResource.name)"
@@ -2947,22 +2947,18 @@ foreach ($sub in $AllSubscriptions) {
             # Ensure that Azure OpenAI service instances don't have administrative privileges
             $openAIControlArray[3].Result = 100
             #$openAIIdentity = az cognitiveservices account identity show --name $openAIResource.name --resource-group $openAIResource.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
-            $uri = "https://management.azure.com$($openAIResource.id)/identity?api-version=2021-04-30"
-            $openAIIdentity = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
-            foreach ($identity in $openAIIdentity) {
-                if ($openAIIdentity.type -match "SystemAssigned") {
-                    Continue
+            if ($openAIDetails.identity.type -match "SystemAssigned") {
+                Continue
+            }
+            else {
+                #$roles = az role assignment list --assignee $identity.principalId --all 2> $null | ConvertFrom-Json -Depth 10
+                $uri = "https://management.azure.com/providers/Microsoft.Authorization/roleAssignments?api-version=2021-04-01&$filter={principalId eq '$($openAIDetails.identity.principalId)'}"
+                $roles = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+                if ($roles.roleDefinitionName -eq "Owner" -or $roles.roleDefinitionName -eq "Contributor" -or $roles.roleDefinitionName -eq "User Access Administrator" -or $roles.roleDefinitionName -eq "Role Based Access Control Administrator") {
+                    $openAIControlArray[3].Result = 0
                 }
                 else {
-                    #$roles = az role assignment list --assignee $identity.principalId --all 2> $null | ConvertFrom-Json -Depth 10
-                    $uri = "https://management.azure.com/providers/Microsoft.Authorization/roleAssignments?api-version=2021-04-01&$filter={principalId eq '$($identity.principalId)'}"
-                    $roles = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
-                    if ($roles.roleDefinitionName -eq "Owner" -or $roles.roleDefinitionName -eq "Contributor" -or $roles.roleDefinitionName -eq "User Access Administrator" -or $roles.roleDefinitionName -eq "Role Based Access Control Administrator") {
-                        $openAIControlArray[3].Result = 0
-                    }
-                    else {
-                        Continue
-                    }
+                    Continue
                 }
             }
 
