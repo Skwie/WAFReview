@@ -2877,6 +2877,8 @@ foreach ($sub in $AllSubscriptions) {
         $openAIJobs += Start-Threadjob -ScriptBlock {
             
             $openAIResource = $using:openAIResource
+            $headers = $using:headers
+            $sub = $using:sub
             $tempOpenAIResults = @()
 
             #$openAIDetails = az cognitiveservices account show --name $openAIResource.name --resource-group $openAIResource.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
