@@ -2642,27 +2642,9 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Authenticate with Microsoft Entra ID to Azure Container Registry
-            $acrEnabled = $false
-            #$acrs = az acr list 2> $null | ConvertFrom-Json -Depth 10
-            $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.ContainerRegistry/registries?api-version=2023-07-01"
-            $acrs = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
-            if ($acrs) {
-                foreach ($acr in $acrs) {
-                    #az aks check-acr --name $aksCluster.name --resource-group $aksCluster.resourceGroup --acr $acr.name 2> $null
-                    $uri = "https://management.azure.com$($aksCluster.id)/checkAcr?acrName=$($acr.name)&api-version=2021-08-01"
-                    $acrCheck = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
-                    if ($?) {
-                        $acrEnabled = $true
-                        $tempAKSResults += "Good: Microsoft Entra ID is used to authenticate with Azure Container Registry for AKS cluster $($aksCluster.name)"
-                        $aksControlArray[2].Result = 100
-                        break
-                    }
-                }
-            }
-            if (!$acrEnabled) {
-                $tempAKSResults += "Bad: Microsoft Entra ID is NOT used to authenticate with Azure Container Registry for AKS cluster $($aksCluster.name)"
-                $aksControlArray[2].Result = 0
-            }
+            # Deprecated, ACR authentication is now handled by the ACR itself
+            $aksControlArray[2].Result = 100
+            $aksControlArray[2].Weight = 0
 
             # Secure network traffic to your API server with private AKS cluster
             if ($clusterDetails.apiServerAccessProfile.enablePrivateCluster -match "True") {
