@@ -2644,7 +2644,7 @@ foreach ($sub in $AllSubscriptions) {
             # Authenticate with Microsoft Entra ID to Azure Container Registry
             $acrEnabled = $false
             #$acrs = az acr list 2> $null | ConvertFrom-Json -Depth 10
-            $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.ContainerRegistry/registries?api-version=2021-06-01"
+            $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.ContainerRegistry/registries?api-version=2023-07-01"
             $acrs = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($acrs) {
                 foreach ($acr in $acrs) {
@@ -2766,7 +2766,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Ensure that AKS clusters are using the latest available version of Kubernetes software
             #$aksVersionStatus = az aks get-upgrades --name $aksCluster.name --resource-group $aksCluster.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
-            $uri = "https://management.azure.com$($aksCluster.id)/upgrades?api-version=2021-08-01"
+            $uri = "https://management.azure.com$($aksCluster.id)/upgradeProfiles/default?api-version=2024-08-01"
             $aksVersionStatus = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
             $latestVersion = $true
             foreach ($upgrade in $aksVersionStatus.controlPlaneProfile.upgrades) {
