@@ -20,10 +20,10 @@
   The script optionally also outputs a PowerPoint presentation with the results of the assessment.
 
 .NOTES
-  Version:        0.8.3
+  Version:        0.8.4
   Author:         Jordy Groenewoud
   Creation Date:  27/03/2024
-  Last Updated:   23/09/2024
+  Last Updated:   27/09/2024
   
 .EXAMPLE
   .\WAFAzCli.ps1 -Filter "-p-lz"
@@ -2962,7 +2962,6 @@ foreach ($sub in $AllSubscriptions) {
                         Continue
                     }
                 }
-
             }
 
             if ($openAIControlArray[3].Result -eq 100) {
@@ -3164,7 +3163,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Use a private endpoint to connect to your SQL Database
             #$privateEndpoint = az network private-endpoint-connection list --id $sqlDb.id 2> $null | ConvertFrom-Json -Depth 10
-            $uri = "https://management.azure.com$($sqlDb.id)/privateEndpointConnections?api-version=2021-05-01-preview"
+            $uri = "https://management.azure.com$($srv.id)/privateEndpointConnections?api-version=2021-11-01"
             $privateEndpoint = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($privateEndpoint) {
                 $tempSQLDbResults += "Good: Private endpoint is used to connect to SQL Database $($sqlDb.name)"
