@@ -3014,13 +3014,17 @@ foreach ($sub in $AllSubscriptions) {
     $SQLDatabases = @()
     $SQLServers = @()
 
-    $SQLServers += az sql server list 2> $null | ConvertFrom-Json -Depth 10
+    #$SQLServers += az sql server list 2> $null | ConvertFrom-Json -Depth 10
+    $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Sql/servers?api-version=2021-05-01-preview"
+    $SQLServers += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
         Write-Error "Unable to retrieve SQL Servers for subscription $($sub.name)." -ErrorAction Continue
     }
 
     foreach ($sqlServer in $SQLServers) {
-        $SQLDatabases += az sql db list --server $sqlServer.name --resource-group $sqlServer.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+        #$SQLDatabases += az sql db list --server $sqlServer.name --resource-group $sqlServer.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+        $uri = "https://management.azure.com$($sqlServer.id)/databases?api-version=2021-05-01-preview"
+        $SQLDatabases += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
         if (!$?) {
             Write-Error "Unable to retrieve SQL Databases for SQL Server $($sqlServer.name)." -ErrorAction Continue
         }
@@ -3061,6 +3065,8 @@ foreach ($sub in $AllSubscriptions) {
         $sqlDbJobs += Start-Threadjob -ScriptBlock {
             
             $sqlDb = $using:sqlDb
+            $headers = $using:headers
+            $sub = $using:sub
             $tempSQLDbResults = @()
 
             $sqlDbControlArray = @()
@@ -3085,7 +3091,9 @@ foreach ($sub in $AllSubscriptions) {
                 $sqlDbTotalWeight += $control.Weight
             }
 
-            $srv = az sql server show --ids $sqlDb.id.Split("/databases/")[0] 2> $null | ConvertFrom-Json -Depth 10
+            #$srv = az sql server show --ids $sqlDb.id.Split("/databases/")[0] 2> $null | ConvertFrom-Json -Depth 10
+            $uri = "https://management.azure.com$($sqlDb.id.Split("/databases/")[0])?api-version=2021-05-01-preview"
+            $srv = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
 
             $tempSQLDbResults += ""
             $tempSQLDbResults += "----- SQL Database - $($srv.name) / $($sqlDb.name) -----"
@@ -3122,7 +3130,9 @@ foreach ($sub in $AllSubscriptions) {
             } 
 
             # Monitor your SQL database in near-real time with Azure Monitor
-            $sqlDbMonitoring = az monitor diagnostic-settings list --resource $sqlDb.id 2> $null | ConvertFrom-Json -Depth 10
+            #$sqlDbMonitoring = az monitor diagnostic-settings list --resource $sqlDb.id 2> $null | ConvertFrom-Json -Depth 10
+            $uri = "https://management.azure.com$($sqlDb.id)/providers/microsoft.insights/diagnosticSettings?api-version=2021-05-01-preview"
+            $sqlDbMonitoring = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($sqlDbMonitoring.type -match "Microsoft.Insights/diagnosticSettings") {
                 $tempSQLDbResults += "Good: SQL database is monitored in near-real time with Azure Monitor for SQL Database $($sqlDb.name)"
                 $sqlDbControlArray[3].Result = 100
@@ -3153,7 +3163,9 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Use a private endpoint to connect to your SQL Database
-            $privateEndpoint = az network private-endpoint-connection list --id $sqlDb.id 2> $null | ConvertFrom-Json -Depth 10
+            #$privateEndpoint = az network private-endpoint-connection list --id $sqlDb.id 2> $null | ConvertFrom-Json -Depth 10
+            $uri = "https://management.azure.com$($sqlDb.id)/privateEndpointConnections?api-version=2021-05-01-preview"
+            $privateEndpoint = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($privateEndpoint) {
                 $tempSQLDbResults += "Good: Private endpoint is used to connect to SQL Database $($sqlDb.name)"
                 $sqlDbControlArray[6].Result = 100
@@ -3174,7 +3186,9 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Use Advanced Threat Protection for your SQL Database
-            $atp = az sql db advanced-threat-protection-setting show --ids $sqlDb.id 2> $null | ConvertFrom-Json -Depth 10
+            #$atp = az sql db advanced-threat-protection-setting show --ids $sqlDb.id 2> $null | ConvertFrom-Json -Depth 10
+            $uri = "https://management.azure.com$($sqlDb.id)/securityAlertPolicies/default?api-version=2021-05-01-preview"
+            $atp = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
             if ($atp.state -match "Enabled") {
                 $tempSQLDbResults += "Good: Advanced Threat Protection is used for SQL Database $($sqlDb.name)"
                 $sqlDbControlArray[8].Result = 100
@@ -3185,7 +3199,9 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Track database events with Azure SQL Database Auditing
-            $auditing = az sql db audit-policy show --ids $sqlDb.id 2> $null | ConvertFrom-Json -Depth 10
+            #$auditing = az sql db audit-policy show --ids $sqlDb.id 2> $null | ConvertFrom-Json -Depth 10
+            $uri = "https://management.azure.com$($sqlDb.id)/securityAlertPolicies/default?api-version=2021-05-01-preview"
+            $auditing = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
             if ($auditing.state -match "Enabled") {
                 $tempSQLDbResults += "Good: Database events are tracked with Azure SQL Database Auditing for SQL Database $($sqlDb.name)"
                 $sqlDbControlArray[9].Result = 100
