@@ -3275,7 +3275,9 @@ foreach ($sub in $AllSubscriptions) {
     Write-Output "Checking SQL Managed Instances for subscription $($sub.name)..."
     $SQLManagedInstances = @()
 
-    $SQLManagedInstances += az sql mi list 2> $null | ConvertFrom-Json -Depth 10
+    #$SQLManagedInstances += az sql mi list 2> $null | ConvertFrom-Json -Depth 10
+    $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Sql/managedInstances?api-version=2021-05-01-preview"
+    $SQLManagedInstances += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
         Write-Error "Unable to retrieve SQL Managed Instances for subscription $($sub.name)." -
         ErrorAction Continue
@@ -3311,6 +3313,8 @@ foreach ($sub in $AllSubscriptions) {
         $sqlMiJobs += Start-Threadjob -ScriptBlock {
             
             $sqlMi = $using:sqlMi
+            $headers = $using:headers
+            $sub = $using:sub
             $tempSQLMiResults = @()
 
             $sqlMiControlArray = @()
@@ -3360,7 +3364,9 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Monitor your SQL managed instance in near-real time with Azure Monitor
-            $sqlMiMonitoring = az monitor diagnostic-settings list --resource $sqlMi.id 2> $null | ConvertFrom-Json -Depth 10
+            #$sqlMiMonitoring = az monitor diagnostic-settings list --resource $sqlMi.id 2> $null | ConvertFrom-Json -Depth 10
+            $uri = "https://management.azure.com$($sqlMi.id)/providers/microsoft.insights/diagnosticSettings?api-version=2021-05-01-preview"
+            $sqlMiMonitoring = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($sqlMiMonitoring.type -match "Microsoft.Insights/diagnosticSettings") {
                 $tempSQLMiResults += "Good: SQL managed instance is monitored in near-real time with Azure Monitor for SQL Managed Instance $($sqlMi.name)"
                 $sqlMiControlArray[2].Result = 100
@@ -3391,7 +3397,9 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Use Advanced Threat Protection for your SQL Managed Instance
-            $atp = az sql mi advanced-threat-protection-setting show --ids $sqlMi.id 2> $null | ConvertFrom-Json -Depth 10
+            #$atp = az sql mi advanced-threat-protection-setting show --ids $sqlMi.id 2> $null | ConvertFrom-Json -Depth 10
+            $uri = "https://management.azure.com$($sqlMi.id)/securityAlertPolicies/default?api-version=2021-05-01-preview"
+            $atp = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
             if ($atp.state -match "Enabled") {
                 $tempSQLMiResults += "Good: Advanced Threat Protection is used for SQL Managed Instance $($sqlMi.name)"
                 $sqlMiControlArray[5].Result = 100
