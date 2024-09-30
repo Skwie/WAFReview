@@ -3354,7 +3354,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Use a zone-redundant configuration to maximize resilience within an Azure region
-            if ($sqlMi.zoneRedundant -match "True") {
+            if ($sqlMi.properties.zoneRedundant -match "True") {
                 $tempSQLMiResults += "Good: Zone-redundant configuration is used to maximize resilience within an Azure region for SQL Managed Instance $($sqlMi.name)"
                 $sqlMiControlArray[1].Result = 100
             }
@@ -3377,7 +3377,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Review the minimum TLS version for your SQL Managed Instance
-            if ($sqlMi.minimalTlsVersion -match "1.2") {
+            if ($sqlMi.properties.minimalTlsVersion -match "1.2") {
                 $tempSQLMiResults += "Good: Minimum TLS version for SQL Managed Instance $($sqlMi.name) is 1.2"
                 $sqlMiControlArray[3].Result = 100
             }
@@ -3387,7 +3387,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Disable public network access to your SQL Managed Instance
-            if ($sqlMi.publicDataEndpointEnabled -match "False") {
+            if ($sqlMi.properties.publicDataEndpointEnabled -match "False") {
                 $tempSQLMiResults += "Good: Public network access is disabled for SQL Managed Instance $($sqlMi.name)"
                 $sqlMiControlArray[4].Result = 100
             }
@@ -3410,7 +3410,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Disable SQL-based authentication for your SQL Managed Instance
-            if ($sqlMi.administrators.azureAdOnlyAuthentication -match "True") {
+            if ($sqlMi.properties.administrators.azureAdOnlyAuthentication -match "True") {
                 $tempSQLMiResults += "Good: SQL-based authentication is disabled for SQL Managed Instance $($sqlMi.name)"
                 $sqlMiControlArray[6].Result = 100
             }
