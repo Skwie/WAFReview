@@ -236,12 +236,6 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
 
-            # Calculate total weight to calculate weighted average
-            $strgTotalWeight = 0
-            foreach ($control in $strgControlArray) {
-                $strgTotalWeight += $control.Weight
-            }
-
             $tempStorageResults = @()
             $tempStorageResults += ""
             $tempStorageResults += "----- Storage Account - $($strg.name) -----"
@@ -507,6 +501,12 @@ foreach ($sub in $AllSubscriptions) {
                 $strgControlArray[17].Result = 0
             }
 
+            # Calculate total weight to calculate weighted average
+            $strgTotalWeight = 0
+            foreach ($control in $strgControlArray) {
+                $strgTotalWeight += $control.Weight
+            }
+
             # Calculate the weighted average for the storage account
             $storageScore = $strgControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
             $storageAvgScore = $storageScore / $strgTotalWeight
@@ -607,12 +607,6 @@ foreach ($sub in $AllSubscriptions) {
                     Weight = $kvCheckWeight
                     Result = $null
                 }
-            }
-
-            # Calculate total weight to calculate weighted average
-            $kvTotalWeight = 0
-            foreach ($control in $kvControlArray) {
-                $kvTotalWeight += $control.Weight
             }
 
             $tempVaultResults = @()
@@ -731,6 +725,12 @@ foreach ($sub in $AllSubscriptions) {
                 $kvControlArray[9].Result = 0
             }
 
+            # Calculate total weight to calculate weighted average
+            $kvTotalWeight = 0
+            foreach ($control in $kvControlArray) {
+                $kvTotalWeight += $control.Weight
+            }
+
             # Calculate the weighted average for the key vault
             $kvScore = $kvControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
             $kvAvgScore = $kvScore / $kvTotalWeight
@@ -845,12 +845,6 @@ foreach ($sub in $AllSubscriptions) {
                     Weight = $vmCheckWeight
                     Result = $null
                 }
-            }
-
-            # Calculate total weight to calculate weighted average
-            $vmTotalWeight = 0
-            foreach ($control in $vmControlArray) {
-                $vmTotalWeight += $control.Weight
             }
 
             $tempVMResults = @()
@@ -1123,6 +1117,12 @@ foreach ($sub in $AllSubscriptions) {
                 $vmControlArray[17].Result = 0
             }
 
+            # Calculate total weight to calculate weighted average
+            $vmTotalWeight = 0
+            foreach ($control in $vmControlArray) {
+                $vmTotalWeight += $control.Weight
+            }
+
             # Calculate the weighted average for the virtual machine
             $vmScore = $vmControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
             $vmAvgScore = $vmScore / $vmTotalWeight
@@ -1244,12 +1244,6 @@ foreach ($sub in $AllSubscriptions) {
                     Weight = $appServiceCheckWeight
                     Result = $null
                 }
-            }
-
-            # Calculate total weight to calculate weighted average
-            $appServiceTotalWeight = 0
-            foreach ($control in $appServiceControlArray) {
-                $appServiceTotalWeight += $control.Weight
             }
 
             if (!$appService.properties) {
@@ -1700,6 +1694,12 @@ foreach ($sub in $AllSubscriptions) {
                     $tempAppServiceResults += "Bad: Private Endpoint is NOT in use for App Service $($appservice.name)"
                     $appServiceControlArray[28].Result = 0
                 }
+
+                # Calculate total weight to calculate weighted average
+                $appServiceTotalWeight = 0
+                foreach ($control in $appServiceControlArray) {
+                    $appServiceTotalWeight += $control.Weight
+                }
     
                 # Calculate the weighted average for the app service
                 $appServiceScore = $appServiceControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
@@ -1824,12 +1824,6 @@ foreach ($sub in $AllSubscriptions) {
                     Weight = $postgreSQLCheckWeight
                     Result = $null
                 }
-            }
-
-            # Calculate total weight to calculate weighted average
-            $postgreSQLTotalWeight = 0
-            foreach ($control in $postgreSQLControlArray) {
-                $postgreSQLTotalWeight += $control.Weight
             }
 
             $tempPostgreSQLResults += ""
@@ -2196,6 +2190,12 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
 
+            # Calculate total weight to calculate weighted average
+            $postgreSQLTotalWeight = 0
+            foreach ($control in $postgreSQLControlArray) {
+                $postgreSQLTotalWeight += $control.Weight
+            }
+
             # Calculate the weighted average for the PostgreSQL server
             $postgreSQLScore = $postgreSQLControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
             $postgreSQLAvgScore = $postgreSQLScore / $postgreSQLTotalWeight
@@ -2297,12 +2297,6 @@ foreach ($sub in $AllSubscriptions) {
                     Weight = $cosmosDBCheckWeight
                     Result = $null
                 }
-            }
-
-            # Calculate total weight to calculate weighted average
-            $cosmosDBTotalWeight = 0
-            foreach ($control in $cosmosDBControlArray) {
-                $cosmosDBTotalWeight += $control.Weight
             }
 
             $tempCosmosDBResults += ""
@@ -2495,6 +2489,12 @@ foreach ($sub in $AllSubscriptions) {
                 $tempCosmosDBResults += "Bad: Default network access is NOT restricted for CosmosDB account $($cosmosAcct.name)"
                 $cosmosDBControlArray[9].Result = 0
             }
+
+            # Calculate total weight to calculate weighted average
+            $cosmosDBTotalWeight = 0
+            foreach ($control in $cosmosDBControlArray) {
+                $cosmosDBTotalWeight += $control.Weight
+            }
             
             # Calculate the weighted average for the CosmosDB account
             $cosmosDBScore = $cosmosDBControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
@@ -2609,12 +2609,6 @@ foreach ($sub in $AllSubscriptions) {
                     Weight = $aksCheckWeight
                     Result = $null
                 }
-            }
-
-            # Calculate total weight to calculate weighted average
-            $aksTotalWeight = 0
-            foreach ($control in $aksControlArray) {
-                $aksTotalWeight += $control.Weight
             }
 
             $tempAKSResults += ""
@@ -2797,6 +2791,12 @@ foreach ($sub in $AllSubscriptions) {
             else {
                 $tempAKSResults += "Bad: Azure Kubernetes clusters are NOT using a private Key Vault for secret data encryption for AKS cluster $($aksCluster.name)"
                 $aksControlArray[16].Result = 0
+            }
+
+            # Calculate total weight to calculate weighted average
+            $aksTotalWeight = 0
+            foreach ($control in $aksControlArray) {
+                $aksTotalWeight += $control.Weight
             }
 
             # Calculate the weighted average for the AKS cluster
@@ -3084,12 +3084,6 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
 
-            # Calculate total weight to calculate weighted average
-            $sqlDbTotalWeight = 0
-            foreach ($control in $sqlDbControlArray) {
-                $sqlDbTotalWeight += $control.Weight
-            }
-
             #$srv = az sql server show --ids $sqlDb.id.Split("/databases/")[0] 2> $null | ConvertFrom-Json -Depth 10
             $uri = "https://management.azure.com$($sqlDb.id.Split("/databases/")[0])?api-version=2021-05-01-preview"
             $srv = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
@@ -3233,6 +3227,12 @@ foreach ($sub in $AllSubscriptions) {
                 $tempSQLDbResults += "Good: SQL-based authentication is disabled for SQL Database $($sqlDb.name)"
             }
 
+            # Calculate total weight to calculate weighted average
+            $sqlDbTotalWeight = 0
+            foreach ($control in $sqlDbControlArray) {
+                $sqlDbTotalWeight += $control.Weight
+            }
+
             # Calculate the weighted average for the SQL Database
             $sqlDbScore = $sqlDbControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
             $sqlDbAvgScore = $sqlDbScore / $sqlDbTotalWeight
@@ -3333,12 +3333,6 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
 
-            # Calculate total weight to calculate weighted average
-            $sqlMiTotalWeight = 0
-            foreach ($control in $sqlMiControlArray) {
-                $sqlMiTotalWeight += $control.Weight
-            }
-
             $tempSQLMiResults += ""
             $tempSQLMiResults += "----- SQL Managed Instance - $($sqlMi.name) -----"
             $tempSQLMiResults += ""
@@ -3417,6 +3411,12 @@ foreach ($sub in $AllSubscriptions) {
             else {
                 $tempSQLMiResults += "Bad: SQL-based authentication is enabled for SQL Managed Instance $($sqlMi.name)"
                 $sqlMiControlArray[6].Result = 0
+            }
+
+            # Calculate total weight to calculate weighted average
+            $sqlMiTotalWeight = 0
+            foreach ($control in $sqlMiControlArray) {
+                $sqlMiTotalWeight += $control.Weight
             }
 
             # Calculate the weighted average for the SQL Managed Instance
