@@ -3456,7 +3456,177 @@ foreach ($sub in $AllSubscriptions) {
 
     # End region
 
-    ############### Region Score by Pillars ##################
+    ################### Region Databricks ####################
+
+    Write-Output "Checking Databricks for subscription $($sub.name)..."
+    $DatabricksWorkspaces = @()
+
+    $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Databricks/workspaces?api-version=2024-05-01-preview"
+    $DatabricksWorkspaces += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+    if (!$?) {
+        Write-Error "Unable to retrieve Databricks Workspaces for subscription $($sub.name)." -ErrorAction Continue
+    }
+
+    # Define controls for Databricks
+    $DatabricksControls = @(
+        "Ensure that the cloud workspaces for your analytics are only accessible by properly managed users;Security;90"
+        "Implement Azure Private Link;Security;80"
+        "Restrict and monitor your virtual machines;Security;90"
+        "Use the VNet injection functionality to enable more secure scenarios;Security;70"
+        "Use diagnostic logs to audit workspace access and permissions;Security;90"
+    )
+
+    $DatabricksResults = @()
+    $DatabricksResults += ""
+    $DatabricksResults += "#####################################"
+    $DatabricksResults += "WAF Assessment Results for Databricks"
+    $DatabricksResults += "#####################################"
+    
+    $DatabricksTotalAvg = 0
+    $DatabricksTotalScore = 0
+    
+    $databricksJobs = @()
+    $databricksControlArrayList = @()
+
+    foreach ($databricks in $DatabricksWorkspaces) {
+        
+        Write-Output "Checking Databricks Workspace $($databricks.name)..."
+
+        $databricksJobs += Start-Threadjob -ScriptBlock {
+            
+            $databricks = $using:databricks
+            $headers = $using:headers
+            $sub = $using:sub
+            $tempDatabricksResults = @()
+
+            $databricksControlArray = @()
+
+            foreach ($control in $using:DatabricksControls) {
+                $databricksCheck = $control.Split(';')
+                $databricksCheckName = $databricksCheck[0]
+                $databricksCheckPillars = $databricksCheck[1].Split(',')
+                $databricksCheckWeight = $databricksCheck[2]
+        
+                $databricksControlArray += [PSCustomObject]@{
+                    Name = $databricksCheckName
+                    Pillars = $databricksCheckPillars
+                    Weight = $databricksCheckWeight
+                    Result = $null
+                }
+            }
+
+            $tempDatabricksResults += ""
+            $tempDatabricksResults += "----- Databricks Workspace - $($databricks.name) -----"
+            $tempDatabricksResults += ""
+
+            # Ensure that the cloud workspaces for your analytics are only accessible by properly managed users
+            $uri = "https://management.azure.com$($databricks.id)/accessControl?api-version=2021-05-01-preview"
+            $accessControl = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
+            if ($accessControl) {
+                $tempDatabricksResults += "Good: Cloud workspaces for analytics are only accessible by properly managed users for Databricks Workspace $($databricks.name)"
+                $databricksControlArray[0].Result = 100
+            }
+            else {
+                $tempDatabricksResults += "Bad: Cloud workspaces for analytics are NOT only accessible by properly managed users for Databricks Workspace $($databricks.name)"
+                $databricksControlArray[0].Result = 0
+            }
+
+            # Implement Azure Private Link
+            #$privateLink = az network private-link-service list --resource-group $databricks.resourceGroup --query "[?contains(name, '$($databricks.name)')]" 2> $null | ConvertFrom-Json -Depth 10
+            $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($databricks.resourceGroup)/providers/Microsoft.Network/privateLinkServices?api-version=2021-05-01"
+            $privateLink = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            if ($privateLink) {
+                $tempDatabricksResults += "Good: Azure Private Link is implemented for Databricks Workspace $($databricks.name)"
+                $databricksControlArray[1].Result = 100
+            }
+            else {
+                $tempDatabricksResults += "Bad: Azure Private Link is NOT implemented for Databricks Workspace $($databricks.name)"
+                $databricksControlArray[1].Result = 0
+            }
+
+            # Restrict and monitor your virtual machines
+            #$vms = az vm list --resource-group $databricks.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+            $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($databricks.resourceGroup)/providers/Microsoft.Compute/virtualMachines?api-version=2021-03-01"
+            $vms = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            if ($vms) {
+                $tempDatabricksResults += "Good: Virtual machines are restricted and monitored for Databricks Workspace $($databricks.name)"
+                $databricksControlArray[2].Result = 100
+            }
+            else {
+                $tempDatabricksResults += "Bad: Virtual machines are NOT restricted and monitored for Databricks Workspace $($databricks.name)"
+                $databricksControlArray[2].Result = 0
+            }
+
+            # Use the VNet injection functionality to enable more secure scenarios
+            #$vnet = az databricks workspace vnet-peering list --workspace-name $databricks.name --resource-group $databricks.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
+            $uri = "https://management.azure.com$($databricks.id)/virtualNetworkPeerings?api-version=2021-05-01-preview"
+            $vnet = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            if ($vnet) {
+                $tempDatabricksResults += "Good: VNet injection functionality is used to enable more secure scenarios for Databricks Workspace $($databricks.name)"
+                $databricksControlArray[3].Result = 100
+            }
+            else {
+                $tempDatabricksResults += "Bad: VNet injection functionality is NOT used to enable more secure scenarios for Databricks Workspace $($databricks.name)"
+                $databricksControlArray[3].Result = 0
+            }
+
+            # Use diagnostic logs to audit workspace access and permissions
+            #$logs = az monitor diagnostic-settings list --resource $databricks.id 2> $null | ConvertFrom-Json -Depth 10
+            $uri = "https://management.azure.com$($databricks.id)/providers/microsoft.insights/diagnosticSettings?api-version=2021-05-01-preview"
+            $logs = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            if ($logs.type -match "Microsoft.Insights/diagnosticSettings") {
+                $tempDatabricksResults += "Good: Diagnostic logs are used to audit workspace access and permissions for Databricks Workspace $($databricks.name)"
+                $databricksControlArray[4].Result = 100
+            }
+            else {
+                $tempDatabricksResults += "Bad: Diagnostic logs are NOT used to audit workspace access and permissions for Databricks Workspace $($databricks.name)"
+                $databricksControlArray[4].Result = 0
+            }
+
+            # Calculate total weight to calculate weighted average
+            $databricksTotalWeight = 0
+            foreach ($control in $databricksControlArray) {
+                $databricksTotalWeight += $control.Weight
+            }
+
+            # Calculate the weighted average for the Databricks Workspace
+            $databricksScore = $databricksControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
+            $databricksAvgScore = $databricksScore / $databricksTotalWeight
+            $roundedDatabricksAvg = [math]::Round($databricksAvgScore, 1)
+
+            $tempDatabricksResults += ""
+            $tempDatabricksResults += "Databricks Workspace - $($databricks.name) has an average score of $roundedDatabricksAvg %."
+
+            $tempDatabricksResults,$databricksControlArray,$databricksScore,$databricksTotalWeight
+        }
+    }
+
+    if ($DatabricksWorkspaces.Count -gt 0) {
+        Write-Output "Waiting for Databricks checks to complete..."
+
+        foreach ($job in ($databricksJobs | Wait-Job)) {
+            $tempDatabricksResults,$databricksControlArray,$databricksScore,$databricksTotalWeight = Receive-Job -Job $job
+            $DatabricksResults += $tempDatabricksResults
+            $DatabricksTotalScore += $databricksScore
+            $databricksControlArrayList += $databricksControlArray
+        }
+
+        $DatabricksTotalAvg = $DatabricksTotalScore / ($databricksTotalWeight * $DatabricksWorkspaces.Count)
+        $roundedDatabricksTotalAvg = [math]::Round($DatabricksTotalAvg, 1)
+
+        $lateReport += "Total average score for all Databricks Workspaces in subscription $($sub.name) is $roundedDatabricksTotalAvg %."
+    }
+    else {
+        $DatabricksResults += ""
+        $DatabricksResults += "No Databricks Workspaces found for subscription $($sub.name)."
+        $DatabricksResults += ""
+    }
+
+    $WAFResults += $DatabricksResults
+
+    # End region
+
+    ################ Region Score by Pillars #################
 
     $allWeightedAverages = @()
 
@@ -3528,6 +3698,13 @@ foreach ($sub in $AllSubscriptions) {
         $allSQLMiWeightedAverages = Get-AllWeightedAveragesPerService($sqlMiControlArrayList)
         foreach ($sqlMiWeightedAverage in $allSQLMiWeightedAverages) {
             $allWeightedAverages += $sqlMiWeightedAverage
+        }
+    }
+
+    if ($databricksControlArray) {
+        $allDatabricksWeightedAverages = Get-AllWeightedAveragesPerService($databricksControlArrayList)
+        foreach ($databricksWeightedAverage in $allDatabricksWeightedAverages) {
+            $allWeightedAverages += $databricksWeightedAverage
         }
     }
 
