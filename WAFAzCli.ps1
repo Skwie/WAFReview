@@ -3473,7 +3473,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Restrict and monitor your virtual machines
-            $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($databricks.resourceGroup)/providers/Microsoft.Compute/virtualMachines?api-version=2024-08-01"
+            $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($databricks.id.Split("/")[4])/providers/Microsoft.Compute/virtualMachines?api-version=2024-08-01"
             $vms = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($vms) {
                 $tempDatabricksResults += "Good: Virtual machines are restricted and monitored for Databricks Workspace $($databricks.name)"
@@ -3487,14 +3487,24 @@ foreach ($sub in $AllSubscriptions) {
 
             # Use the VNet injection functionality to enable more secure scenarios
             $uri = "https://management.azure.com$($databricks.id)/virtualNetworkPeerings?api-version=2024-05-01"
-            $vnet = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
-            if ($vnet) {
-                $tempDatabricksResults += "Good: VNet injection functionality is used to enable more secure scenarios for Databricks Workspace $($databricks.name)"
-                $databricksControlArray[3].Result = 100
+            try {
+                $vnet = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+
+                if ($vnet) {
+                    $tempDatabricksResults += "Good: VNet injection functionality is used to enable more secure scenarios for Databricks Workspace $($databricks.name)"
+                    $databricksControlArray[3].Result = 100
+                }
+                else {
+                    $tempDatabricksResults += "Bad: VNet injection functionality is NOT used to enable more secure scenarios for Databricks Workspace $($databricks.name)"
+                    $databricksControlArray[3].Result = 0
+                }
             }
-            else {
-                $tempDatabricksResults += "Bad: VNet injection functionality is NOT used to enable more secure scenarios for Databricks Workspace $($databricks.name)"
-                $databricksControlArray[3].Result = 0
+            catch {
+                if ($_.Exception.Response.StatusCode -match "VNetPeeringNotAllowed") {
+                    $tempDatabricksResults += "Informational: VNet injection functionality is not allowed for Databricks Workspace $($databricks.name)"
+                    $databricksControlArray[3].Result = 0
+                    $databricksControlArray[3].Weight = 0
+                }
             }
 
             # Use diagnostic logs to audit workspace access and permissions
