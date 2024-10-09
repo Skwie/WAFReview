@@ -163,7 +163,6 @@ foreach ($sub in $AllSubscriptions) {
     
     Write-Output "Checking Storage Accounts for subscription $($sub.name)..."
 
-    #$StorageAccounts = az storage account list 2> $null | ConvertFrom-Json -Depth 10
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Storage/storageAccounts?api-version=2023-05-01"
     $StorageAccounts = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
@@ -242,11 +241,9 @@ foreach ($sub in $AllSubscriptions) {
             $tempStorageResults += ""
             
             # Turn on soft delete for blob data
-            #$BlobProperties = az storage account blob-service-properties show --account-name $strg.name 2> $null 
             $uri = "https://management.azure.com$($strg.id)/blobServices/default?api-version=2023-05-01"
             $BlobProperties = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
             if ($BlobProperties.Count -gt 0) {
-                #$RetentionPolicy = $BlobProperties | ConvertFrom-Json -Depth 10 | Select-Object deleteRetentionPolicy
                 if ($BlobProperties.deleteRetentionPolicy.enabled) {
                     $tempStorageResults += "Good: Soft Delete is active for $($strg.name)"
                     $strgControlArray[0].Result = 100
@@ -371,7 +368,6 @@ foreach ($sub in $AllSubscriptions) {
             }
             
             # Regenerate your account keys periodically.
-            #$RegenerationLogs = az monitor activity-log list --resource-group $strg.resourceGroup --status Succeeded --offset 90d --query '[*].{authorization:authorization.action,eventTimestamp:eventTimestamp}' | ConvertFrom-Json -Depth 10
             $filter = "eventTimestamp ge '$((Get-Date).AddDays(-90).ToString('yyyy-MM-ddTHH:mm:ssZ'))' and eventTimestamp le '$((Get-Date).ToString('yyyy-MM-ddTHH:mm:ssZ'))' and resourceGroupName eq '$resourceGroup'"
             $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Insights/eventtypes/management/values?api-version=2015-04-01&`$filter=$($filter)"
             $RegenerationLogs = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value.properties
@@ -413,7 +409,6 @@ foreach ($sub in $AllSubscriptions) {
             }
             
             # Use lifecycle policy to move data between access tiers.
-            #$policy = az storage account management-policy show --account-name $strg.name --resource-group $strg.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
             $uri = "https://management.azure.com$($strg.id)/managementPolicies/default?api-version=2023-05-01"
             try {
                 $policy = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
@@ -438,7 +433,6 @@ foreach ($sub in $AllSubscriptions) {
             $policy = $null
 
             # Check for Publicly Accessible Web Containers
-            #az storage container show --account-name $strg.name --name insights-operational-logs --query 'properties.publicAccess'
             if ($storageContainerProperties.Count -gt 0) {
                 $publicContainers = $false
                 foreach ($container in $storageContainerProperties) {
@@ -548,7 +542,6 @@ foreach ($sub in $AllSubscriptions) {
 
     Write-Output "Checking Key Vaults for subscription $($sub.name)..."
 
-    #$Keyvaults = az keyvault list 2> $null | ConvertFrom-Json -Depth 10
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.KeyVault/vaults?api-version=2022-07-01"
     $Keyvaults = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
@@ -645,7 +638,6 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Check for Key Vault Full Administrator Permissions
-            #$vaultsettings = az keyvault show --name $keyvault.name | ConvertFrom-Json -Depth 10
             $uri = "https://management.azure.com$($keyvault.id)?api-version=2022-07-01"
             $vaultsettings = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
             if ('All' -in $vaultsettings.properties.accesspolicies.permissions.certificates -or 'All' -in $vaultsettings.properties.accesspolicies.permissions.keys -or 'All' -in $vaultsettings.properties.accesspolicies.permissions.secrets -or 'All' -in $vaultsettings.properties.accesspolicies.permissions.storage) {
@@ -663,7 +655,6 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Audit event logging should be active for Azure Key Vault
-            #$diag = az monitor diagnostic-settings list --resource $keyvault.id --query '[*].logs | []' | ConvertFrom-Json -Depth 10
             $uri = "https://management.azure.com$($keyvault.id)/providers/microsoft.insights/diagnosticSettings?api-version=2021-05-01-preview"
             $diag = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value.properties
             if (($diag | Where-Object {$_.category -eq 'AuditEvent'}).enabled -eq $True) {
@@ -775,7 +766,6 @@ foreach ($sub in $AllSubscriptions) {
 
     Write-Output "Checking Virtual Machines for subscription $($sub.name)..."
     
-    #$VirtualMachines = az vm list 2> $null | ConvertFrom-Json -Depth 10
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01"
     $VirtualMachines = (((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value) | Where-Object {$_.tags -notmatch 'DatabricksEnvironment'}
     if (!$?) {
@@ -813,7 +803,6 @@ foreach ($sub in $AllSubscriptions) {
     $vmTotalScore = 0
 
     # Query JIT policies once, as they are not VM-specific
-    #$jitPolicies = az security jit-policy list --query '[*].virtualMachines | []' | ConvertFrom-Json -Depth 10
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Security/jitNetworkAccessPolicies?api-version=2020-01-01"
     $jitPolicies = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
 
@@ -883,7 +872,6 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Restrict public IP addresses for Azure Virtual Machines
-            #$VmIpAddresses = az vm list-ip-addresses --name $vm.name --resource-group $vm.resourceGroup | ConvertFrom-Json -Depth 10
             if ($Vm.networkProfile.networkInterfaceConfigurations.ipConfigurations.publicIpAddressConfiguration) {
                 $tempVMResults += "Bad: Public IP addresses are present on VM $($vm.name)"
                 $vmControlArray[3].Result = 0
@@ -894,7 +882,6 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Restrict IP forwarding for Azure Virtual Machines
-            #$VmNICs = az network nic list --query "[?virtualMachine.id == '$($vm.id)']" | ConvertFrom-Json -Depth 10
             $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Network/networkInterfaces?api-version=2021-02-01"
             $VmNICs = (((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value) | Where-Object {$_.properties.virtualMachine.id -eq $vm.id}
             $enableForwarding = $false
@@ -934,7 +921,6 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Enable Azure Disk Encryption for Azure Virtual Machines
-            #$DiskEncryption = az vm encryption show --name $vm.name --resource-group $vm.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
             if ($vm.resources.id -match 'AzureDiskEncryption') {
                 $tempVMResults += "Good: Azure Disk Encryption is enabled for VM $($vm.name)"
                 $vmControlArray[6].Result = 100
@@ -955,7 +941,6 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Enable Hybrid Benefit for Azure Virtual Machines
-            #$detailedVmInfo = az vm get-instance-view --name $vm.name --resource-group $vm.resourceGroup 2> $null | ConvertFrom-Json -Depth 15
             if ($vm.properties.licenseType -match 'Windows_Server') {
                 $tempVMResults += "Good: Hybrid Benefit is enabled for VM $($vm.name)"
                 $vmControlArray[8].Result = 100
@@ -1096,12 +1081,10 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Enable VM Backup for Azure Virtual Machines
-            #$vaults = az backup vault list --query '[*].name' 2> $null | ConvertFrom-Json -Depth 10
             $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.RecoveryServices/vaults?api-version=2024-04-01"
             $vaults = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             $vmBackedUp = $false
             foreach ($vault in $vaults) {
-                #$backupItems = az backup item list --vault-name $vault --resource-group $vm.resourceGroup --query '[*].properties.virtualMachineId' 2> $null | ConvertFrom-Json -Depth 10
                 $uri = "https://management.azure.com$($vault.id)/backupProtectedItems?api-version=2024-04-01"
                 $backupItems = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value.id
                 if ($backupItems -match $vm.name) {
@@ -1164,7 +1147,6 @@ foreach ($sub in $AllSubscriptions) {
 
     Write-Output "Checking App Services for subscription $($sub.name)..."
 
-    #$AppServices = az webapp list 2> $null | ConvertFrom-Json -Depth 10
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Web/sites?api-version=2021-02-01"
     $AppServices = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
@@ -1228,8 +1210,6 @@ foreach ($sub in $AllSubscriptions) {
             $sub = $using:sub
             $tempAppServiceResults = @()
             $tempSkippedAppServices = 0
-
-            #$appDetails = az webapp show --name $appservice.name --resource-group $appservice.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
             $appServiceControlArray = @()
 
             foreach ($control in $using:AppServiceControls) {
@@ -1298,7 +1278,6 @@ foreach ($sub in $AllSubscriptions) {
                 }
     
                 # Set up backup and restore
-                #$backupConf = az webapp config backup show --resource-group $appservice.resourceGroup --webapp-name $appservice.name 2> $null | ConvertFrom-Json -Depth 10
                 $uri = "https://management.azure.com$($appService.id)/config/backup/list?api-version=2023-12-01"
                 $noBackupPermissions = $null
                 try {
@@ -1329,7 +1308,6 @@ foreach ($sub in $AllSubscriptions) {
                 }
     
                 # Ensure App Service Environments (ASE) are deployed in highly available configurations across Availability Zones
-                #$aseDetails = az appservice plan show --id $appDetails.appServicePlanId | ConvertFrom-Json -Depth 10
                 if (!$appService.properties.serverFarmId) {
                     $tempAppServiceResults += "Informational: App Service Plan ID not found for App Service $($appservice.name), so the app service plan is not evaluated."
                     $appServiceControlArray[5].Result = 0
@@ -1411,7 +1389,6 @@ foreach ($sub in $AllSubscriptions) {
                 }
     
                 # Use Deployment slots for resilient code deployments
-                #$deploymentSlots = az webapp deployment slot list --name $appservice.name --resource-group $appservice.resourceGroup --query '[*].name' | ConvertFrom-Json -Depth 10
                 $uri = "https://management.azure.com$($appService.id)/slots?api-version=2023-12-01"
                 $deploymentSlots = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
                 if ($deploymentSlots) {
@@ -1424,7 +1401,6 @@ foreach ($sub in $AllSubscriptions) {
                 }
     
                 # Use Run From Package to avoid deployment conflicts
-                #$appSettings = az webapp config appsettings list --name $appservice.name --resource-group $appservice.resourceGroup | ConvertFrom-Json -Depth 10
                 if ($appSettings) {
                     if (($appSettings -match 'WEBSITE_RUN_FROM_PACKAGE').slotSetting -match 'True') {
                         $tempAppServiceResults += "Good: Run From Package is used for App Service $($appservice.name)"
@@ -1452,7 +1428,6 @@ foreach ($sub in $AllSubscriptions) {
                 }
     
                 # Enable Autoscale to ensure adequate resources are available to service requests
-                #$autoscale = az monitor autoscale list --resource-group $appservice.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
                 $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.properties.resourceGroup)/providers/Microsoft.Insights/autoscalesettings?api-version=2022-10-01"
                 $autoscale = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($autoscale.targetResourceUri -match $appservice.id -and $autoscale.enabled -match 'True') {
@@ -1639,7 +1614,6 @@ foreach ($sub in $AllSubscriptions) {
                 }
     
                 # Enable App Service Authentication
-                #$appAuth = az webapp auth show --ids $appservice.id 2> $null | ConvertFrom-Json -Depth 10
                 try {
                     $uri = "https://management.azure.com$($appservice.id)/config/authsettings/list?api-version=2023-12-01"
                     $appAuth = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Post).Content | ConvertFrom-Json -Depth 10)
@@ -1672,7 +1646,6 @@ foreach ($sub in $AllSubscriptions) {
                 }
     
                 # Enable registration with Microsoft Entra ID
-                #$appIdentity = az webapp identity show --name $appservice.name --resource-group $appservice.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
                 if ($appService.identity.type -match 'SystemAssigned') {
                     $tempAppServiceResults += "Good: Registration with Microsoft Entra ID is enabled for App Service $($appservice.name)"
                     $appServiceControlArray[27].Result = 100
@@ -1683,7 +1656,6 @@ foreach ($sub in $AllSubscriptions) {
                 }
 
                 # Private Endpoint in Use
-                #$privateEndpoint = az network private-endpoint-connection list --name $appService.name --resource-group $appService.resourceGroup --type 'Microsoft.Web/Sites' 2> $null | ConvertFrom-Json -Depth 10
                 $uri = "https://management.azure.com$($appService.id)/privateEndpointConnections?api-version=2023-12-01"
                 $privateEndpoint = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($privateEndpoint) {
@@ -1753,14 +1725,12 @@ foreach ($sub in $AllSubscriptions) {
 
     $PostgreSQLServers = @()
 
-    #$PostgreSQLServers += az postgres server list 2> $null | ConvertFrom-Json -Depth 10
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.DBforPostgreSQL/servers?api-version=2017-12-01"
     $PostgreSQLServers += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
         Write-Error "Unable to retrieve PostgreSQL single servers for subscription $($sub.name)." -ErrorAction Continue
     }
 
-    #$PostgreSQLServers += az postgres flexible-server list 2> $null | ConvertFrom-Json -Depth 10
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.DBforPostgreSQL/flexibleServers?api-version=2022-12-01"
     $PostgreSQLServers += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
@@ -1865,7 +1835,6 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Monitor your server to ensure it's healthy and performing as expected
-            #$serverMetrics = az monitor metrics alert list --resource $server.id --resource-group $server.resourceGroup 2>$null | ConvertFrom-Json -Depth 10
             $uri = "https://management.azure.com/subscriptions/$($server.id.split('/')[2])/resourceGroups/$($server.id.split('/')[4])/providers/microsoft.insights/metricAlerts?api-version=2018-03-01"
             $serverMetrics = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value.properties
             if ($server.id -in $serverMetrics.scopes) {
@@ -1903,7 +1872,6 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Implement network security groups and firewalls to control access to your database
-            #$firewallRules = az postgres server firewall-rule list --server-name $server.name --resource-group $server.resourceGroup 2>$null | ConvertFrom-Json -Depth 10
             $uri = "https://management.azure.com$($server.id)/firewallRules?api-version=2022-12-01"
             $firewallRules = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if (!$?) {
@@ -1975,7 +1943,6 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Check for PostgreSQL Log Retention Period
-            #$logretention = az postgres server configuration show --server-name $server.name --resource-group $server.resourceGroup --name log_retention_days
             $uri = "https://management.azure.com$($server.id)/configurations/logfiles.retention_days?api-version=2022-12-01"
             $logretention = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties.value
             if ($logretention.value -ge 7) {
@@ -2050,6 +2017,7 @@ foreach ($sub in $AllSubscriptions) {
             }
             if ($serverStatus -match 'flexible') {
                 $uri = "https://management.azure.com$($server.id)/configurations/connection_throttle.enable?api-version=2022-12-01"
+                $connectionThrottling = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($connectionThrottling.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'CONNECTION_THROTTLING' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[10].Result = 100
@@ -2114,7 +2082,6 @@ foreach ($sub in $AllSubscriptions) {
 
             # Enable 'LOG_DISCONNECTIONS' Parameter for PostgreSQL Servers
             if ($serverStatus -match 'single') {
-                #$logDisconnections = az postgres server configuration show --server-name $server.name --resource-group $server.resourceGroup --name log_disconnections
                 $uri = "https://management.azure.com$($server.id)/configurations/log_disconnections?api-version=2017-12-01"
                 $logDisconnections = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($logDisconnections.value -match 'on') {
@@ -2127,7 +2094,6 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match 'flexible') {
-                #$logDisconnections = az postgres flexible-server parameter show --server-name $server.name --resource-group $server.resourceGroup --name log_disconnections
                 $uri = "https://management.azure.com$($server.id)/configurations/log_disconnections?api-version=2022-12-01"
                 $logDisconnections = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($logDisconnections.value -match 'on') {
@@ -2142,7 +2108,6 @@ foreach ($sub in $AllSubscriptions) {
 
             # Enable 'LOG_DURATION' Parameter for PostgreSQL Servers
             if ($serverStatus -match 'single') {
-                #$logDuration = az postgres server configuration show --server-name $server.name --resource-group $server.resourceGroup --name log_duration
                 $uri = "https://management.azure.com$($server.id)/configurations/log_duration?api-version=2017-12-01"
                 $logDuration = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($logDuration.value -match 'on') {
@@ -2155,7 +2120,6 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             if ($serverStatus -match 'flexible') {
-                #$logDuration = az postgres flexible-server parameter show --server-name $server.name --resource-group $server.resourceGroup --name log_duration
                 $uri = "https://management.azure.com$($server.id)/configurations/log_duration?api-version=2022-12-01"
                 $logDuration = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
                 if ($logDuration.value -match 'on') {
@@ -2239,7 +2203,6 @@ foreach ($sub in $AllSubscriptions) {
 
     $CosmosDBAccounts = @()
 
-    #$CosmosDBAccounts += az cosmosdb list 2> $null | ConvertFrom-Json -Depth 10
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.DocumentDB/databaseAccounts?api-version=2021-04-15"
     $CosmosDBAccounts += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
@@ -2344,7 +2307,6 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Use role-based access control to limit control-plane access to specific identities and groups and within the scope of well-defined assignments
-            #$roleAssignments = az cosmosdb sql role assignment list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup 2> $null
             $uri = "https://management.azure.com$($cosmosAcct.id)/providers/Microsoft.Authorization/roleAssignments?api-version=2022-04-01"
             $roleAssignments = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($?) {
@@ -2364,7 +2326,6 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Enable Microsoft Defender for Azure Cosmos DB
-            #$defenderStatus = az security atp cosmosdb show --cosmosdb-account $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup | ConvertFrom-Json -Depth 10
             $uri = "https://management.azure.com$($cosmosAcct.id)/providers/Microsoft.Security/advancedThreatProtectionSettings/current?api-version=2019-01-01"
             $defenderStatus = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
             if ($defenderStatus.isEnabled) {
@@ -2379,10 +2340,8 @@ foreach ($sub in $AllSubscriptions) {
             # Implement time-to-live (TTL) to remove unused items
             # Check the type of db; Gremlin, Cassandra and SQL support TTL
             if ($cosmosAcct.properties.capabilities.name -match 'EnableGremlin' ) {
-                #$gremlinDB = az cosmosdb gremlin database list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup | ConvertFrom-Json -Depth 10
                 $uri = "https://management.azure.com$($cosmosAcct.id)/gremlinDatabases?api-version=2022-12-01"
                 $gremlinDB = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
-                #$ttl = az cosmosdb gremlin database show --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup --name $gremlinDB[0].name | ConvertFrom-Json -Depth 10
                 $uri = "https://management.azure.com$($gremlinDB[0].id)?api-version=2022-12-01"
                 $ttl = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
                 if ($ttl.defaultTtl -ge 1) {
@@ -2395,14 +2354,11 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
             elseif ($cosmosAcct.properties.capabilities.name -match 'EnableCassandra') {
-                #$cassandraDB = az cosmosdb cassandra keyspace list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup | ConvertFrom-Json -Depth 10
                 $uri = "https://management.azure.com$($cosmosAcct.id)/cassandraKeyspaces?api-version=2022-12-01"
                 $cassandraDB = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
-                #$cassandraTable = az cosmosdb cassandra table list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup --keyspace-name $cassandraDB[0].name | ConvertFrom-Json -Depth 10
                 $uri = "https://management.azure.com$($cassandraDB[0].id)/cassandraTables?api-version=2022-12-01"
                 $cassandraTable = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
                 if ($cassandraTable.length -ge 1) {
-                    #$ttl = az cosmosdb cassandra table show --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup --keyspace-name $cassandraDB[0].name --name $cassandraTable[0].name | ConvertFrom-Json -Depth 10
                     $uri = "https://management.azure.com$($cassandraTable[0].id)?api-version=2022-12-01"
                     $ttl = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
                     if ($ttl.defaultTtl -ge 1) {
@@ -2431,10 +2387,8 @@ foreach ($sub in $AllSubscriptions) {
                 $cosmosDBControlArray[6].Weight = 0
             }
             else {
-                #$sqlDB = az cosmosdb sql database list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup | ConvertFrom-Json -Depth 10
                 $uri = "https://management.azure.com$($cosmosAcct.id)/sqlDatabases?api-version=2024-08-15"
                 $sqlDB = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
-                #$sqlContainer = az cosmosdb sql container list --account-name $cosmosAcct.name --resource-group $cosmosAcct.resourceGroup --db-name $sqlDB[0].name | ConvertFrom-Json -Depth 10
                 $uri = "https://management.azure.com$($sqlDB[0].id)/containers?api-version=2024-08-15"
                 $sqlContainer = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
                 if ($sqlContainer.length -ge 1) {
@@ -2455,7 +2409,6 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Create alerts associated with host machine resources (Currently binary yes/no check, needs to be updated to check for specific alerts)
-            #$hostAlerts = az monitor metrics alert list --resource $cosmosAcct.id --resource-group $cosmosAcct.resourceGroup
             $uri = "https://management.azure.com/subscriptions/$($cosmosAcct.id.split("/")[2])/resourceGroups/$($cosmosAcct.id.split("/")[4])/providers/Microsoft.Insights/metricAlerts?api-version=2018-03-01"
             $hostAlerts = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($hostAlerts) {
@@ -2468,7 +2421,6 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Create alerts for throughput throttling (Currently binary yes/no check, needs to be updated to check for specific alerts)
-            #$throttleAlerts = az monitor metrics alert list --resource $cosmosAcct.id --resource-group $cosmosAcct.resourceGroup
             $uri = "https://management.azure.com/subscriptions/$($cosmosAcct.id.split("/")[2])/resourceGroups/$($cosmosAcct.id.split("/")[4])/providers/Microsoft.Insights/metricAlerts?api-version=2018-03-01"
             $throttleAlerts = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($throttleAlerts) {
@@ -2539,7 +2491,6 @@ foreach ($sub in $AllSubscriptions) {
 
     $AKSClusters = @()
 
-    #$AKSClusters += az aks list 2> $null | ConvertFrom-Json -Depth 10
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.ContainerService/managedClusters?api-version=2021-08-01"
     $AKSClusters += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
@@ -2593,7 +2544,6 @@ foreach ($sub in $AllSubscriptions) {
 
             $aksControlArray = @()
 
-            #$clusterDetails = az aks show --name $aksCluster.name --resource-group $aksCluster.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
             $uri = "https://management.azure.com$($aksCluster.id)?api-version=2021-08-01"
             $clusterDetails = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
 
@@ -2741,7 +2691,6 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Ensure that AKS clusters are using the latest available version of Kubernetes software
-            #$aksVersionStatus = az aks get-upgrades --name $aksCluster.name --resource-group $aksCluster.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
             $uri = "https://management.azure.com$($aksCluster.id)/upgradeProfiles/default?api-version=2024-08-01"
             $aksVersionStatus = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
             $latestVersion = $true
@@ -2771,7 +2720,6 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Ensure that AKS clusters are configured to use the Network Contributor role
-            #$networkRole = az role assignment list --scope $aksCluster.id --role "Network Contributor" 2> $null
             $uri = "https://management.azure.com$($aksCluster.id)/providers/Microsoft.Authorization/roleAssignments?api-version=2022-04-01"
             $networkRole = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($networkRole) {
@@ -2842,7 +2790,6 @@ foreach ($sub in $AllSubscriptions) {
 
     $OpenAIResources = @()
 
-    #$OpenAIResources += az cognitiveservices account list 2> $null | ConvertFrom-Json -Depth 10 | Where-Object { $_.kind -match "OpenAI" }
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.CognitiveServices/accounts?api-version=2021-04-30"
     $OpenAIResources += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value | Where-Object { $_.kind -match "OpenAI" }
     if (!$?) {
@@ -2881,7 +2828,6 @@ foreach ($sub in $AllSubscriptions) {
             $sub = $using:sub
             $tempOpenAIResults = @()
 
-            #$openAIDetails = az cognitiveservices account show --name $openAIResource.name --resource-group $openAIResource.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
             $uri = "https://management.azure.com$($openAIResource.id)?api-version=2021-04-30"
             $openAIDetails = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
 
@@ -2932,7 +2878,6 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Enable and configure Diagnostics for the Azure OpenAI Service
-            #$openAIDiagnostics = az monitor diagnostic-settings list --resource $openAIResource.id 2> $null | ConvertFrom-Json -Depth 10
             $uri = "https://management.azure.com$($openAIResource.id)/providers/microsoft.insights/diagnosticSettings?api-version=2021-05-01-preview"
             $openAIDiagnostics = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($openAIDiagnostics.type -match "Microsoft.Insights/diagnosticSettings") {
@@ -2946,7 +2891,6 @@ foreach ($sub in $AllSubscriptions) {
 
             # Ensure that Azure OpenAI service instances don't have administrative privileges
             $openAIControlArray[3].Result = 100
-            #$openAIIdentity = az cognitiveservices account identity show --name $openAIResource.name --resource-group $openAIResource.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
             foreach ($identity in $openAIDetails.identity) {
                 if ($identity.type -match "SystemAssigned") {
                     Continue
@@ -3013,7 +2957,6 @@ foreach ($sub in $AllSubscriptions) {
     $SQLDatabases = @()
     $SQLServers = @()
 
-    #$SQLServers += az sql server list 2> $null | ConvertFrom-Json -Depth 10
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Sql/servers?api-version=2021-05-01-preview"
     $SQLServers += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
@@ -3021,7 +2964,6 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     foreach ($sqlServer in $SQLServers) {
-        #$SQLDatabases += az sql db list --server $sqlServer.name --resource-group $sqlServer.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
         $uri = "https://management.azure.com$($sqlServer.id)/databases?api-version=2021-05-01-preview"
         $SQLDatabases += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
         if (!$?) {
@@ -3084,7 +3026,6 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
 
-            #$srv = az sql server show --ids $sqlDb.id.Split("/databases/")[0] 2> $null | ConvertFrom-Json -Depth 10
             $uri = "https://management.azure.com$($sqlDb.id.Split("/databases/")[0])?api-version=2021-05-01-preview"
             $srv = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
 
@@ -3123,7 +3064,6 @@ foreach ($sub in $AllSubscriptions) {
             } 
 
             # Monitor your SQL database in near-real time with Azure Monitor
-            #$sqlDbMonitoring = az monitor diagnostic-settings list --resource $sqlDb.id 2> $null | ConvertFrom-Json -Depth 10
             $uri = "https://management.azure.com$($sqlDb.id)/providers/microsoft.insights/diagnosticSettings?api-version=2021-05-01-preview"
             $sqlDbMonitoring = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($sqlDbMonitoring.type -match "Microsoft.Insights/diagnosticSettings") {
@@ -3156,7 +3096,6 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Use a private endpoint to connect to your SQL Database
-            #$privateEndpoint = az network private-endpoint-connection list --id $sqlDb.id 2> $null | ConvertFrom-Json -Depth 10
             $uri = "https://management.azure.com$($srv.id)/privateEndpointConnections?api-version=2021-11-01"
             $privateEndpoint = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($privateEndpoint) {
@@ -3179,7 +3118,6 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Use Advanced Threat Protection for your SQL Database
-            #$atp = az sql db advanced-threat-protection-setting show --ids $sqlDb.id 2> $null | ConvertFrom-Json -Depth 10
             $uri = "https://management.azure.com$($sqlDb.id)/securityAlertPolicies/default?api-version=2021-05-01-preview"
             $atp = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
             if ($atp.state -match "Enabled") {
@@ -3192,7 +3130,6 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Track database events with Azure SQL Database Auditing
-            #$auditing = az sql db audit-policy show --ids $sqlDb.id 2> $null | ConvertFrom-Json -Depth 10
             $uri = "https://management.azure.com$($sqlDb.id)/securityAlertPolicies/default?api-version=2021-05-01-preview"
             $auditing = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
             if ($auditing.state -match "Enabled") {
@@ -3275,7 +3212,6 @@ foreach ($sub in $AllSubscriptions) {
     Write-Output "Checking SQL Managed Instances for subscription $($sub.name)..."
     $SQLManagedInstances = @()
 
-    #$SQLManagedInstances += az sql mi list 2> $null | ConvertFrom-Json -Depth 10
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Sql/managedInstances?api-version=2021-05-01-preview"
     $SQLManagedInstances += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
@@ -3358,7 +3294,6 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Monitor your SQL managed instance in near-real time with Azure Monitor
-            #$sqlMiMonitoring = az monitor diagnostic-settings list --resource $sqlMi.id 2> $null | ConvertFrom-Json -Depth 10
             $uri = "https://management.azure.com$($sqlMi.id)/providers/microsoft.insights/diagnosticSettings?api-version=2021-05-01-preview"
             $sqlMiMonitoring = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($sqlMiMonitoring.type -match "Microsoft.Insights/diagnosticSettings") {
@@ -3391,7 +3326,6 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Use Advanced Threat Protection for your SQL Managed Instance
-            #$atp = az sql mi advanced-threat-protection-setting show --ids $sqlMi.id 2> $null | ConvertFrom-Json -Depth 10
             $uri = "https://management.azure.com$($sqlMi.id)/securityAlertPolicies/default?api-version=2021-05-01-preview"
             $atp = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
             if ($atp.state -match "Enabled") {
@@ -3461,7 +3395,7 @@ foreach ($sub in $AllSubscriptions) {
     Write-Output "Checking Databricks for subscription $($sub.name)..."
     $DatabricksWorkspaces = @()
 
-    $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Databricks/workspaces?api-version=2024-05-01-preview"
+    $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Databricks/workspaces?api-version=2024-05-01"
     $DatabricksWorkspaces += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
         Write-Error "Unable to retrieve Databricks Workspaces for subscription $($sub.name)." -ErrorAction Continue
