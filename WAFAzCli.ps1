@@ -2896,7 +2896,6 @@ foreach ($sub in $AllSubscriptions) {
                     Continue
                 }
                 else {
-                    #$roles = az role assignment list --assignee $identity.principalId --all 2> $null | ConvertFrom-Json -Depth 10
                     $uri = "https://management.azure.com/providers/Microsoft.Authorization/roleAssignments?api-version=2021-04-01&$filter={principalId eq '$($identity.principalId)'}"
                     $roles = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
                     if ($roles.roleDefinitionName -eq "Owner" -or $roles.roleDefinitionName -eq "Contributor" -or $roles.roleDefinitionName -eq "User Access Administrator" -or $roles.roleDefinitionName -eq "Role Based Access Control Administrator") {
@@ -3454,9 +3453,7 @@ foreach ($sub in $AllSubscriptions) {
             $tempDatabricksResults += ""
 
             # Ensure that the cloud workspaces for your analytics are only accessible by properly managed users
-            $uri = "https://management.azure.com$($databricks.id)/accessControl?api-version=2021-05-01-preview"
-            $accessControl = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
-            if ($accessControl) {
+            if ($databricks.properties.managedResourceGroupId) {
                 $tempDatabricksResults += "Good: Cloud workspaces for analytics are only accessible by properly managed users for Databricks Workspace $($databricks.name)"
                 $databricksControlArray[0].Result = 100
             }
@@ -3466,10 +3463,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Implement Azure Private Link
-            #$privateLink = az network private-link-service list --resource-group $databricks.resourceGroup --query "[?contains(name, '$($databricks.name)')]" 2> $null | ConvertFrom-Json -Depth 10
-            $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($databricks.resourceGroup)/providers/Microsoft.Network/privateLinkServices?api-version=2021-05-01"
-            $privateLink = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
-            if ($privateLink) {
+            if ($databricks.properties.privateEndpointConnections) {
                 $tempDatabricksResults += "Good: Azure Private Link is implemented for Databricks Workspace $($databricks.name)"
                 $databricksControlArray[1].Result = 100
             }
@@ -3479,21 +3473,20 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Restrict and monitor your virtual machines
-            #$vms = az vm list --resource-group $databricks.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
-            $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($databricks.resourceGroup)/providers/Microsoft.Compute/virtualMachines?api-version=2021-03-01"
+            $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($databricks.resourceGroup)/providers/Microsoft.Compute/virtualMachines?api-version=2024-08-01"
             $vms = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($vms) {
                 $tempDatabricksResults += "Good: Virtual machines are restricted and monitored for Databricks Workspace $($databricks.name)"
                 $databricksControlArray[2].Result = 100
             }
             else {
-                $tempDatabricksResults += "Bad: Virtual machines are NOT restricted and monitored for Databricks Workspace $($databricks.name)"
+                $tempDatabricksResults += "Informational: No VMs found for Databricks Workspace $($databricks.name)"
                 $databricksControlArray[2].Result = 0
+                $databricksControlArray[2].Weight = 0
             }
 
             # Use the VNet injection functionality to enable more secure scenarios
-            #$vnet = az databricks workspace vnet-peering list --workspace-name $databricks.name --resource-group $databricks.resourceGroup 2> $null | ConvertFrom-Json -Depth 10
-            $uri = "https://management.azure.com$($databricks.id)/virtualNetworkPeerings?api-version=2021-05-01-preview"
+            $uri = "https://management.azure.com$($databricks.id)/virtualNetworkPeerings?api-version=2024-05-01"
             $vnet = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($vnet) {
                 $tempDatabricksResults += "Good: VNet injection functionality is used to enable more secure scenarios for Databricks Workspace $($databricks.name)"
@@ -3505,7 +3498,6 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Use diagnostic logs to audit workspace access and permissions
-            #$logs = az monitor diagnostic-settings list --resource $databricks.id 2> $null | ConvertFrom-Json -Depth 10
             $uri = "https://management.azure.com$($databricks.id)/providers/microsoft.insights/diagnosticSettings?api-version=2021-05-01-preview"
             $logs = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($logs.type -match "Microsoft.Insights/diagnosticSettings") {
