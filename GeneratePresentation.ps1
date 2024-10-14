@@ -143,32 +143,42 @@ $azureResourceScores = $azureResourceScores | ForEach-Object { $_ -replace "Azur
 
 $azureResourceScores = $azureResourceScores | Join-String -Separator "`n"
 
-#Write-Host $azureResourceScores
-# Create a new slide by duplicating the summary slide
-$newSlide = $reportTemplateObject.Slides.AddSlide($reportTemplateObject.Slides.Count + 1, $summarySlide.CustomLayout)
+# Define the maximum number of lines per slide
+$maxLinesPerSlide = 20
 
-# Add the lines to the new slide
-# Assuming the slide has a single text box shape
-$newSlide.Shapes[2].TextFrame.TextRange.Text = $azureResourceScores -join "`n"
+# Split the content into chunks of lines
+$chunks = [System.Collections.ArrayList]::new()
+for ($i = 0; $i -lt $azureResourceScores.Count; $i += $maxLinesPerSlide) {
+    $chunks.Add($azureResourceScores[$i..[math]::Min($i + $maxLinesPerSlide - 1, $azureResourceScores.Count - 1)])
+}
 
-# Set the font size and font of the text box
-$newSlide.Shapes[2].TextFrame.TextRange.Font.Size = 13  # Replace with the actual font size
-$newSlide.Shapes[2].TextFrame.TextRange.Font.Name = "Arial" 
+foreach ($chunk in $chunks) {
+    # Create a new slide by duplicating the summary slide
+    $newSlide = $reportTemplateObject.Slides.AddSlide($reportTemplateObject.Slides.Count + 1, $summarySlide.CustomLayout)
 
-$newSlide.Shapes[1].TextFrame.TextRange.Text = "Scores for each Service"  # Replace with the actual font size
-$newSlide.Shapes[1].TextFrame.TextRange.Font.Name = "Arial" 
-$newSlide.Shapes[1].TextFrame.TextRange.Font.Size = 18
-    
- # Add margins by adjusting the position and size of the text box
-$newSlide.Shapes[1].Top -= 170 
-$newSlide.Shapes[1].Left +=40
-$newSlide.Shapes[2].Top -= 150 
+    # Add the lines to the new slide
+    # Assuming the slide has a single text box shape
+    $newSlide.Shapes[2].TextFrame.TextRange.Text = $chunk -join "`n"
+
+    # Set the font size and font of the text box
+    $newSlide.Shapes[2].TextFrame.TextRange.Font.Size = 13  # Replace with the actual font size
+    $newSlide.Shapes[2].TextFrame.TextRange.Font.Name = "Arial" 
+
+    $newSlide.Shapes[1].TextFrame.TextRange.Text = "Scores for each Service"  # Replace with the actual font size
+    $newSlide.Shapes[1].TextFrame.TextRange.Font.Name = "Arial" 
+    $newSlide.Shapes[1].TextFrame.TextRange.Font.Size = 18
+        
+    # Add margins by adjusting the position and size of the text box
+    $newSlide.Shapes[1].Top -= 170 
+    $newSlide.Shapes[1].Left +=40
+    $newSlide.Shapes[2].Top -= 150
+}
 
 ####################### Edit result slide #############################################
 
 $startIndex = 9
 
-  # Loop through the content and create a new slide for each chunk
+# Loop through the content and create a new slide for each chunk
 for ($i = $startIndex; $i -lt $csvContent.Count; $i += $chunkSize) {
     
     # Modify the chunk size depending on the content
@@ -197,28 +207,35 @@ for ($i = $startIndex; $i -lt $csvContent.Count; $i += $chunkSize) {
     }
 
     # Get the next chunk of lines
-    $chunk = $csvContent[$i..($i + $chunkSize - 1)]
-    $chunk = $chunk.Replace('"', '')
+    $detailChunk = $csvContent[$i..($i + $chunkSize - 1)]
+    $detailChunk = $detailChunk.Replace('"', '')
 
-    # Create a new slide by duplicating the summary slide
-    $newSlide = $reportTemplateObject.Slides.AddSlide($reportTemplateObject.Slides.Count + 1, $summarySlide.CustomLayout)
- 
-    $newSlide.Shapes[2].TextFrame.TextRange.Text = $chunk -join "`n"
+    # Split the content into chunks of lines
+    $chunks = [System.Collections.ArrayList]::new()
+    for ($i = 0; $i -lt $detailChunk.Count; $i += $maxLinesPerSlide) {
+        $chunks.Add($detailChunk[$i..[math]::Min($i + $maxLinesPerSlide - 1, $detailChunk.Count - 1)])
+    }
+
+    foreach ($chunk in $chunks) {
+        # Create a new slide by duplicating the summary slide
+        $newSlide = $reportTemplateObject.Slides.AddSlide($reportTemplateObject.Slides.Count + 1, $summarySlide.CustomLayout)
     
-    # Set the font size and font of the text box
-    $newSlide.Shapes[2].TextFrame.TextRange.Font.Size = 11  # Replace with the actual font size
-    $newSlide.Shapes[2].TextFrame.TextRange.Font.Name = "Arial" 
-
-    $newSlide.Shapes[1].TextFrame.TextRange.Text = "Detailed Results for each Service"  # Replace with the actual font size
-    $newSlide.Shapes[1].TextFrame.TextRange.Font.Name = "Arial" 
-    $newSlide.Shapes[1].TextFrame.TextRange.Font.Size = 18
+        $newSlide.Shapes[2].TextFrame.TextRange.Text = $chunk -join "`n"
         
-     # Add margins by adjusting the position and size of the text box
-    
-    $newSlide.Shapes[1].Top -= 170 
-    $newSlide.Shapes[1].Left +=20
-    $newSlide.Shapes[2].Top -= 200        
-   
+        # Set the font size and font of the text box
+        $newSlide.Shapes[2].TextFrame.TextRange.Font.Size = 11  # Replace with the actual font size
+        $newSlide.Shapes[2].TextFrame.TextRange.Font.Name = "Arial" 
+
+        $newSlide.Shapes[1].TextFrame.TextRange.Text = "Detailed Results for each Service"  # Replace with the actual font size
+        $newSlide.Shapes[1].TextFrame.TextRange.Font.Name = "Arial" 
+        $newSlide.Shapes[1].TextFrame.TextRange.Font.Size = 18
+            
+        # Add margins by adjusting the position and size of the text box
+        
+        $newSlide.Shapes[1].Top -= 170 
+        $newSlide.Shapes[1].Left +=20
+        $newSlide.Shapes[2].Top -= 200        
+    }
 }
 
 #Remove empty detail slides
