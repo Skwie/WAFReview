@@ -141,8 +141,6 @@ $azureResourceScores = $lines | Where-Object { $_ -match "Azure Resource" }
 # Remove "Azure Resources - " from each line
 $azureResourceScores = $azureResourceScores | ForEach-Object { $_ -replace "Azure Resource -", "" -replace "has an average", "" -replace "of", ":" -replace "of", ":"}
 
-$azureResourceScores = $azureResourceScores | Join-String -Separator "`n"
-
 # Define the maximum number of lines per slide
 $maxLinesPerSlide = 20
 
@@ -212,8 +210,8 @@ for ($i = $startIndex; $i -lt $csvContent.Count; $i += $chunkSize) {
 
     # Split the content into chunks of lines
     $chunks = [System.Collections.ArrayList]::new()
-    for ($i = 0; $i -lt $detailChunk.Count; $i += $maxLinesPerSlide) {
-        $chunks.Add($detailChunk[$i..[math]::Min($i + $maxLinesPerSlide - 1, $detailChunk.Count - 1)])
+    for ($j = 0; $j -lt $detailChunk.Count; $j += $maxLinesPerSlide) {
+        $chunks.Add($detailChunk[$j..[math]::Min($j + $maxLinesPerSlide - 1, $detailChunk.Count - 1)])
     }
 
     foreach ($chunk in $chunks) {
