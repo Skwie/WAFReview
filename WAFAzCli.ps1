@@ -3175,7 +3175,7 @@ foreach ($sub in $AllSubscriptions) {
             $roundedSQLDbAvg = [math]::Round($sqlDbAvgScore, 1)
 
             $tempSQLDbResults += ""
-            $tempSQLDbResults += "SQL Database - $($sqlDb.name) has an average score of $roundedSQLDbAvg %."
+            $tempSQLDbResults += "Azure Resource - SQL Database - $($sqlDb.name) has an average score of $roundedSQLDbAvg %."
 
             $tempSQLDbResults,$sqlDbControlArray,$sqlDbScore,$sqlDbTotalWeight
         }
