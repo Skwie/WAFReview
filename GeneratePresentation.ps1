@@ -175,6 +175,7 @@ foreach ($chunk in $chunks) {
 ####################### Edit result slide #############################################
 
 $startIndex = 9
+$maxLinesPerSlide = 25
 
 # Loop through the content and create a new slide for each chunk
 for ($i = $startIndex; $i -lt $csvContent.Count; $i += $chunkSize) {
