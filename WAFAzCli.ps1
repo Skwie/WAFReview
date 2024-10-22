@@ -3473,7 +3473,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Restrict and monitor your virtual machines
-            $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($databricks.id.Split("/")[4])/providers/Microsoft.Compute/virtualMachines?api-version=2024-08-01"
+            $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($databricks.id.Split("/")[4])/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01"
             $vms = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($vms) {
                 $tempDatabricksResults += "Good: Virtual machines are restricted and monitored for Databricks Workspace $($databricks.name)"
@@ -3568,7 +3568,7 @@ foreach ($sub in $AllSubscriptions) {
     $AppGateways = @()
 
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Network/applicationGateways?api-version=2021-05-01"
-    $AppGateways += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+    $AppGateways += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 15).value
     if (!$?) {
         Write-Error "Unable to retrieve Application Gateways for subscription $($sub.name)." -ErrorAction Continue
     }
