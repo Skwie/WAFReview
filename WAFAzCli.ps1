@@ -3752,7 +3752,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Configure alerts to notify you if capacity metrics exceed thresholds
             $gwResourceGroup = $appGateway.id.Split("/")[4]
-            $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroup/$gwResourceGroup/providers/microsoft.insights/metricAlerts?api-version=2024-08-01"
+            $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroup/$gwResourceGroup/providers/microsoft.insights/metricAlerts?api-version=2018-03-01"
             $alerts = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($alerts.properties.criteria.allOf.metricName -match "CPU|Memory|Storage") {
                 $tempAppGatewayResults += "Good: Alerts are configured to notify you if capacity metrics exceed thresholds for Application Gateway $($appGateway.name)"
