@@ -3562,6 +3562,293 @@ foreach ($sub in $AllSubscriptions) {
 
     # End region
 
+    ############### Region Application Gateway ###############
+
+    Write-Output "Checking Application Gateways for subscription $($sub.name)..."
+    $AppGateways = @()
+
+    $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Network/applicationGateways?api-version=2021-05-01"
+    $AppGateways += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+    if (!$?) {
+        Write-Error "Unable to retrieve Application Gateways for subscription $($sub.name)." -ErrorAction Continue
+    }
+
+    # Define controls for Application Gateway
+    $AppGatewayControls = @(
+        "Deploy Application Gateway instances in a zone-aware configuration;Reliability;80"
+        "Use Application Gateway health probes to detect backend unavailability;Reliability;80"
+        "Configure rate limiting rules for WAF so that clients can't send too much traffic to your application;Reliability;90"
+        "Don't use UDRs on Application Gateway;Reliability;90"
+        "Configure the IdleTimeout settings to match the backend;Reliability;90"
+        "Set up a TLS policy for enhanced security and ensure you use the latest version;Security;90"
+        "Use Application Gateway for TLS termination;Security;90"
+        "Integrate Application Gateway with Key Vault for SSL certificates;Security;90"
+        "Comply with all NSG restrictions for Application Gateway;Security;90"
+        "Stop Application Gateway instances when not in use;Cost Optimization;90"
+        "Monitor key cost driver Application Gateway metrics;Cost Optimization;90"
+        "Configure alerts to notify you if capacity metrics exceed thresholds;Operational Excellence;90"
+        "Configure alerts to notify you of backend health issues;Operational Excellence;90"
+        "Enable diagnostics logging for Application Gateway;Operational Excellence;90"
+        "Use Advisor to monitor Key Vault configuration problems;Operational Excellence;90"
+        "Set the maximum autoscale instance count to the maximum possible;Performance Efficiency;90"
+    )
+
+    $AppGatewayResults = @()
+    $AppGatewayResults += ""
+    $AppGatewayResults += "##############################################"
+    $AppGatewayResults += "WAF Assessment Results for Application Gateway"
+    $AppGatewayResults += "##############################################"
+
+    $AppGatewayTotalAvg = 0
+    $AppGatewayTotalScore = 0
+
+    $appGatewayJobs = @()
+    $appGatewayControlArrayList = @()
+
+    foreach ($appGateway in $AppGateways) {
+        
+        Write-Output "Checking Application Gateway $($appGateway.name)..."
+
+        $appGatewayJobs += Start-Threadjob -ScriptBlock {
+            
+            $appGateway = $using:appGateway
+            $headers = $using:headers
+            $sub = $using:sub
+            $tempAppGatewayResults = @()
+
+            $appGatewayControlArray = @()
+
+            foreach ($control in $using:AppGatewayControls) {
+                $appGatewayCheck = $control.Split(';')
+                $appGatewayCheckName = $appGatewayCheck[0]
+                $appGatewayCheckPillars = $appGatewayCheck[1].Split(',')
+                $appGatewayCheckWeight = $appGatewayCheck[2]
+        
+                $appGatewayControlArray += [PSCustomObject]@{
+                    Name = $appGatewayCheckName
+                    Pillars = $appGatewayCheckPillars
+                    Weight = $appGatewayCheckWeight
+                    Result = $null
+                }
+            }
+
+            $tempAppGatewayResults += ""
+            $tempAppGatewayResults += "----- Application Gateway - $($appGateway.name) -----"
+            $tempAppGatewayResults += ""
+
+            # Deploy Application Gateway instances in a zone-aware configuration
+            if ($appGateway.zones) {
+                $tempAppGatewayResults += "Good: Application Gateway instances are deployed in a zone-aware configuration for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[0].Result = 100
+            }
+            else {
+                $tempAppGatewayResults += "Bad: Application Gateway instances are NOT deployed in a zone-aware configuration for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[0].Result = 0
+            }
+
+            # Use Application Gateway health probes to detect backend unavailability
+            if ($appGateway.httpSettingsCollection.healthProbeSettings) {
+                $tempAppGatewayResults += "Good: Application Gateway health probes are used to detect backend unavailability for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[1].Result = 100
+            }
+            else {
+                $tempAppGatewayResults += "Bad: Application Gateway health probes are NOT used to detect backend unavailability for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[1].Result = 0
+            }
+
+            # Configure rate limiting rules for WAF so that clients can't send too much traffic to your application
+            if ($appGateway.webApplicationFirewallConfiguration.rateLimitRules) {
+                $tempAppGatewayResults += "Good: Rate limiting rules for WAF are configured for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[2].Result = 100
+            }
+            else {
+                $tempAppGatewayResults += "Bad: Rate limiting rules for WAF are NOT configured for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[2].Result = 0
+            }
+
+            # Don't use UDRs on Application Gateway
+            if ($appGateway.gatewayIPConfigurations) {
+                $tempAppGatewayResults += "Good: UDRs are NOT used on Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[3].Result = 100
+            }
+            else {
+                $tempAppGatewayResults += "Bad: UDRs are used on Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[3].Result = 0
+            }
+
+            # Configure the IdleTimeout settings to match the backend
+            if ($appGateway.backendHttpSettingsCollection) {
+                $tempAppGatewayResults += "Good: IdleTimeout settings are configured to match the backend for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[4].Result = 100
+            }
+            else {
+                $tempAppGatewayResults += "Bad: IdleTimeout settings are NOT configured to match the backend for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[4].Result = 0
+            }
+
+            # Set up a TLS policy for enhanced security and ensure you use the latest version
+            if ($appGateway.sslPolicy) {
+                $tempAppGatewayResults += "Good: TLS policy is set up for enhanced security and the latest version is used for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[5].Result = 100
+            }
+            else {
+                $tempAppGatewayResults += "Bad: TLS policy is NOT set up for enhanced security and the latest version is NOT used for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[5].Result = 0
+            }
+
+            # Use Application Gateway for TLS termination
+            if ($appGateway.sslCertificates) {
+                $tempAppGatewayResults += "Good: Application Gateway is used for TLS termination for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[6].Result = 100
+            }
+            else {
+                $tempAppGatewayResults += "Bad: Application Gateway is NOT used for TLS termination for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[6].Result = 0
+            }
+
+            # Integrate Application Gateway with Key Vault for SSL certificates
+            if ($appGateway.sslCertificates) {
+                $tempAppGatewayResults += "Good: Application Gateway is integrated with Key Vault for SSL certificates for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[7].Result = 100
+            }
+            else {
+                $tempAppGatewayResults += "Bad: Application Gateway is NOT integrated with Key Vault for SSL certificates for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[7].Result = 0
+            }
+
+            # Comply with all NSG restrictions for Application Gateway
+            if ($appGateway.networkRuleSet) {
+                $tempAppGatewayResults += "Good: All NSG restrictions are complied with for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[8].Result = 100
+            }
+            else {
+                $tempAppGatewayResults += "Bad: All NSG restrictions are NOT complied with for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[8].Result = 0
+            }
+
+            # Stop Application Gateway instances when not in use
+            if ($appGateway.provisioningState -match "Succeeded") {
+                $tempAppGatewayResults += "Good: Application Gateway instances are stopped when not in use for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[9].Result = 100
+            }
+            else {
+                $tempAppGatewayResults += "Bad: Application Gateway instances are NOT stopped when not in use for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[9].Result = 0
+            }
+
+            # Monitor key cost driver Application Gateway metrics
+            $uri = "https://management.azure.com$($appGateway.id)/providers/microsoft.insights/metrics?api-version=2021-05-01"
+            $metrics = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            if ($metrics) {
+                $tempAppGatewayResults += "Good: Key cost driver Application Gateway metrics are monitored for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[10].Result = 100
+            }
+            else {
+                $tempAppGatewayResults += "Bad: Key cost driver Application Gateway metrics are NOT monitored for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[10].Result = 0
+            }
+
+            # Configure alerts to notify you if capacity metrics exceed thresholds
+            $uri = "https://management.azure.com$($appGateway.id)/providers/microsoft.insights/metricAlerts?api-version=2021-05-01"
+            $alerts = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            if ($alerts) {
+                $tempAppGatewayResults += "Good: Alerts are configured to notify you if capacity metrics exceed thresholds for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[11].Result = 100
+            }
+            else {
+                $tempAppGatewayResults += "Bad: Alerts are NOT configured to notify you if capacity metrics exceed thresholds for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[11].Result = 0
+            }
+
+            # Configure alerts to notify you of backend health issues
+            $uri = "https://management.azure.com$($appGateway.id)/providers/microsoft.insights/metricAlerts?api-version=2021-05-01"
+            $alerts = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            if ($alerts) {
+                $tempAppGatewayResults += "Good: Alerts are configured to notify you of backend health issues for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[12].Result = 100
+            }
+            else {
+                $tempAppGatewayResults += "Bad: Alerts are NOT configured to notify you of backend health issues for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[12].Result = 0
+            }
+
+            # Enable diagnostics logging for Application Gateway
+            $uri = "https://management.azure.com$($appGateway.id)/providers/microsoft.insights/diagnosticSettings?api-version=2021-05-01-preview"
+            $logs = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            if ($logs.type -match "Microsoft.Insights/diagnosticSettings") {
+                $tempAppGatewayResults += "Good: Diagnostics logging is enabled for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[13].Result = 100
+            }
+            else {
+                $tempAppGatewayResults += "Bad: Diagnostics logging is NOT enabled for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[13].Result = 0
+            }
+
+            # Use Advisor to monitor Key Vault configuration problems
+            $uri = "https://management.azure.com$($appGateway.id)/providers/microsoft.security/assessments?api-version=2021-05-01"
+            $advisor = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            if ($advisor) {
+                $tempAppGatewayResults += "Good: Advisor is used to monitor Key Vault configuration problems for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[14].Result = 100
+            }
+            else {
+                $tempAppGatewayResults += "Bad: Advisor is NOT used to monitor Key Vault configuration problems for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[14].Result = 0
+            }
+
+            # Set the maximum autoscale instance count to the maximum possible
+            if ($appGateway.autoscaleConfiguration.maxCapacity -match "100") {
+                $tempAppGatewayResults += "Good: Maximum autoscale instance count is set to the maximum possible for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[15].Result = 100
+            }
+            else {
+                $tempAppGatewayResults += "Bad: Maximum autoscale instance count is NOT set to the maximum possible for Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[15].Result = 0
+            }
+
+            # Calculate total weight to calculate weighted average
+            $appGatewayTotalWeight = 0
+            foreach ($control in $appGatewayControlArray) {
+                $appGatewayTotalWeight += $control.Weight
+            }
+
+            # Calculate the weighted average for the Application Gateway
+            $appGatewayScore = $appGatewayControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
+            $appGatewayAvgScore = $appGatewayScore / $appGatewayTotalWeight
+            $roundedAppGatewayAvg = [math]::Round($appGatewayAvgScore, 1)
+
+            $tempAppGatewayResults += ""
+            $tempAppGatewayResults += "Application Gateway - $($appGateway.name) has an average score of $roundedAppGatewayAvg %."
+
+            $tempAppGatewayResults,$appGatewayControlArray,$appGatewayScore,$appGatewayTotalWeight
+        }
+    }
+
+    if ($AppGateways.Count -gt 0) {
+        Write-Output "Waiting for Application Gateway checks to complete..."
+
+        foreach ($job in ($appGatewayJobs | Wait-Job)) {
+            $tempAppGatewayResults,$appGatewayControlArray,$appGatewayScore,$appGatewayTotalWeight = Receive-Job -Job $job
+            $AppGatewayResults += $tempAppGatewayResults
+            $AppGatewayTotalScore += $appGatewayScore
+            $appGatewayControlArrayList += $appGatewayControlArray
+        }
+
+        $AppGatewayTotalAvg = $AppGatewayTotalScore / ($appGatewayTotalWeight * $AppGateways.Count)
+        $roundedAppGatewayTotalAvg = [math]::Round($AppGatewayTotalAvg, 1)
+
+        $lateReport += "Total average score for all Application Gateways in subscription $($sub.name) is $roundedAppGatewayTotalAvg %."
+    }
+    else {
+        $AppGatewayResults += ""
+        $AppGatewayResults += "No Application Gateways found for subscription $($sub.name)."
+        $AppGatewayResults += ""
+    }
+
+    $WAFResults += $AppGatewayResults
+
+    # End region
+
     ################ Region Score by Pillars #################
 
     $allWeightedAverages = @()
@@ -3641,6 +3928,13 @@ foreach ($sub in $AllSubscriptions) {
         $allDatabricksWeightedAverages = Get-AllWeightedAveragesPerService($databricksControlArrayList)
         foreach ($databricksWeightedAverage in $allDatabricksWeightedAverages) {
             $allWeightedAverages += $databricksWeightedAverage
+        }
+    }
+
+    if ($appGatewayControlArray) {
+        $allAppGatewayWeightedAverages = Get-AllWeightedAveragesPerService($appGatewayControlArrayList)
+        foreach ($appGatewayWeightedAverage in $allAppGatewayWeightedAverages) {
+            $allWeightedAverages += $appGatewayWeightedAverage
         }
     }
 
