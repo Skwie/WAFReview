@@ -3647,7 +3647,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Use Application Gateway health probes to detect backend unavailability
-            if ($appGateway.httpSettingsCollection.healthProbeSettings) {
+            if ($appGateway.properties.probes) {
                 $tempAppGatewayResults += "Good: Application Gateway health probes are used to detect backend unavailability for Application Gateway $($appGateway.name)"
                 $appGatewayControlArray[1].Result = 100
             }
@@ -3657,7 +3657,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Configure rate limiting rules for WAF so that clients can't send too much traffic to your application
-            if ($appGateway.webApplicationFirewallConfiguration.rateLimitRules) {
+            if ($appGateway.webApplicationFirewallConfiguration.enabled -match "True") {
                 $tempAppGatewayResults += "Good: Rate limiting rules for WAF are configured for Application Gateway $($appGateway.name)"
                 $appGatewayControlArray[2].Result = 100
             }
@@ -3667,17 +3667,17 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Don't use UDRs on Application Gateway
-            if ($appGateway.gatewayIPConfigurations) {
-                $tempAppGatewayResults += "Good: UDRs are NOT used on Application Gateway $($appGateway.name)"
-                $appGatewayControlArray[3].Result = 100
-            }
-            else {
+            if ($appGateway.properties.requestRoutingRules.name -notmatch "PublicRoutingRule|PrivateRoutingRule") {
                 $tempAppGatewayResults += "Bad: UDRs are used on Application Gateway $($appGateway.name)"
                 $appGatewayControlArray[3].Result = 0
             }
+            else {
+                $tempAppGatewayResults += "Good: UDRs are NOT used on Application Gateway $($appGateway.name)"
+                $appGatewayControlArray[3].Result = 100
+            }
 
             # Configure the IdleTimeout settings to match the backend
-            if ($appGateway.backendHttpSettingsCollection) {
+            if ($appGateway.properties.backendHttpSettingsCollection.count -eq $appGateway.properties.backendHttpSettingsCollection.properties.requestTimeout.count) {
                 $tempAppGatewayResults += "Good: IdleTimeout settings are configured to match the backend for Application Gateway $($appGateway.name)"
                 $appGatewayControlArray[4].Result = 100
             }
@@ -3687,17 +3687,17 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Set up a TLS policy for enhanced security and ensure you use the latest version
-            if ($appGateway.sslPolicy) {
+            if ($appGateway.properties.sslPolicy.policyName -match "AppGwSslPolicy20220101S") {
                 $tempAppGatewayResults += "Good: TLS policy is set up for enhanced security and the latest version is used for Application Gateway $($appGateway.name)"
                 $appGatewayControlArray[5].Result = 100
             }
             else {
-                $tempAppGatewayResults += "Bad: TLS policy is NOT set up for enhanced security and the latest version is NOT used for Application Gateway $($appGateway.name)"
+                $tempAppGatewayResults += "Bad: TLS policy is NOT set up for enhanced security or the latest version is NOT used for Application Gateway $($appGateway.name)"
                 $appGatewayControlArray[5].Result = 0
             }
 
             # Use Application Gateway for TLS termination
-            if ($appGateway.sslCertificates) {
+            if ($appGateway.properties.sslCertificates) {
                 $tempAppGatewayResults += "Good: Application Gateway is used for TLS termination for Application Gateway $($appGateway.name)"
                 $appGatewayControlArray[6].Result = 100
             }
@@ -3707,7 +3707,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Integrate Application Gateway with Key Vault for SSL certificates
-            if ($appGateway.sslCertificates) {
+            if ($appGateway.properties.sslCertificates.properties.keyVaultSecretId) {
                 $tempAppGatewayResults += "Good: Application Gateway is integrated with Key Vault for SSL certificates for Application Gateway $($appGateway.name)"
                 $appGatewayControlArray[7].Result = 100
             }
@@ -3717,17 +3717,19 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Comply with all NSG restrictions for Application Gateway
-            if ($appGateway.networkRuleSet) {
+            $nsg = ((Invoke-WebRequest -Uri "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Network/networkSecurityGroups?api-version=2024-03-01" -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value 
+            $gwNSG = $nsg | Where-Object { $_.properties.subnets.id -match $appGateway.properties.gatewayIPConfigurations.properties.subnet.id }
+            if ($gwNSG.properties.securityRules.properties.sourceAddressPrefix -match "AzureLoadBalancer" -and "GatewayManager") {
                 $tempAppGatewayResults += "Good: All NSG restrictions are complied with for Application Gateway $($appGateway.name)"
                 $appGatewayControlArray[8].Result = 100
             }
             else {
-                $tempAppGatewayResults += "Bad: All NSG restrictions are NOT complied with for Application Gateway $($appGateway.name)"
+                $tempAppGatewayResults += "Bad: NSG restrictions are NOT all complied with for Application Gateway $($appGateway.name)"
                 $appGatewayControlArray[8].Result = 0
             }
 
             # Stop Application Gateway instances when not in use
-            if ($appGateway.provisioningState -match "Succeeded") {
+            if ($appGateway.properties.autoscaleConfiguration.minCapacity -lt $appGateway.properties.autoscaleConfiguration.maxCapacity) {
                 $tempAppGatewayResults += "Good: Application Gateway instances are stopped when not in use for Application Gateway $($appGateway.name)"
                 $appGatewayControlArray[9].Result = 100
             }
@@ -3737,7 +3739,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Monitor key cost driver Application Gateway metrics
-            $uri = "https://management.azure.com$($appGateway.id)/providers/microsoft.insights/metrics?api-version=2021-05-01"
+            $uri = "https://management.azure.com$($appGateway.id)/providers/microsoft.insights/metrics?api-version=2023-10-01"
             $metrics = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($metrics) {
                 $tempAppGatewayResults += "Good: Key cost driver Application Gateway metrics are monitored for Application Gateway $($appGateway.name)"
@@ -3749,9 +3751,10 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Configure alerts to notify you if capacity metrics exceed thresholds
-            $uri = "https://management.azure.com$($appGateway.id)/providers/microsoft.insights/metricAlerts?api-version=2021-05-01"
+            $gwResourceGroup = $appGateway.id.Split("/")[4]
+            $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroup/$gwResourceGroup/providers/microsoft.insights/metricAlerts?api-version=2018-03-01"
             $alerts = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
-            if ($alerts) {
+            if ($alerts.properties.criteria.allOf.metricName -match "CPU|Memory|Storage") {
                 $tempAppGatewayResults += "Good: Alerts are configured to notify you if capacity metrics exceed thresholds for Application Gateway $($appGateway.name)"
                 $appGatewayControlArray[11].Result = 100
             }
@@ -3761,9 +3764,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Configure alerts to notify you of backend health issues
-            $uri = "https://management.azure.com$($appGateway.id)/providers/microsoft.insights/metricAlerts?api-version=2021-05-01"
-            $alerts = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
-            if ($alerts) {
+            if ($alerts.properties.criteria.allOf.metricName -match "UnhealthyHostCount") {
                 $tempAppGatewayResults += "Good: Alerts are configured to notify you of backend health issues for Application Gateway $($appGateway.name)"
                 $appGatewayControlArray[12].Result = 100
             }
