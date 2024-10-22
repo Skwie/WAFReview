@@ -20,10 +20,10 @@
   The script optionally also outputs a PowerPoint presentation with the results of the assessment.
 
 .NOTES
-  Version:        0.8.4
+  Version:        0.8.5
   Author:         Jordy Groenewoud
   Creation Date:  27/03/2024
-  Last Updated:   27/09/2024
+  Last Updated:   22/10/2024
   
 .EXAMPLE
   .\WAFAzCli.ps1 -Filter "-p-lz"
@@ -3752,7 +3752,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Configure alerts to notify you if capacity metrics exceed thresholds
             $gwResourceGroup = $appGateway.id.Split("/")[4]
-            $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroup/$gwResourceGroup/providers/microsoft.insights/metricAlerts?api-version=2024-08-01"
+            $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$gwResourceGroup/providers/microsoft.insights/metricAlerts?api-version=2024-08-01"
             $alerts = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($alerts.properties.criteria.allOf.metricName -match "CPU|Memory|Storage") {
                 $tempAppGatewayResults += "Good: Alerts are configured to notify you if capacity metrics exceed thresholds for Application Gateway $($appGateway.name)"
