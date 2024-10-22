@@ -20,10 +20,10 @@
   The script optionally also outputs a PowerPoint presentation with the results of the assessment.
 
 .NOTES
-  Version:        0.8.4
+  Version:        0.8.5
   Author:         Jordy Groenewoud
   Creation Date:  27/03/2024
-  Last Updated:   27/09/2024
+  Last Updated:   22/10/2024
   
 .EXAMPLE
   .\WAFAzCli.ps1 -Filter "-p-lz"
