@@ -3657,7 +3657,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Configure rate limiting rules for WAF so that clients can't send too much traffic to your application
-            if ($appGateway.webApplicationFirewallConfiguration.enabled -match "True") {
+            if ($appGateway.properties.webApplicationFirewallConfiguration.enabled -match "True") {
                 $tempAppGatewayResults += "Good: Rate limiting rules for WAF are configured for Application Gateway $($appGateway.name)"
                 $appGatewayControlArray[2].Result = 100
             }
@@ -3667,7 +3667,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Don't use UDRs on Application Gateway
-            if ($appGateway.properties.requestRoutingRules.name -notmatch "PublicRoutingRule|PrivateRoutingRule") {
+            if ($appGateway.properties.requestRoutingRules.name -notmatch "PublicBasicRoutingRule|PrivateBasicRoutingRule") {
                 $tempAppGatewayResults += "Bad: UDRs are used on Application Gateway $($appGateway.name)"
                 $appGatewayControlArray[3].Result = 0
             }
@@ -3752,7 +3752,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Configure alerts to notify you if capacity metrics exceed thresholds
             $gwResourceGroup = $appGateway.id.Split("/")[4]
-            $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroup/$gwResourceGroup/providers/microsoft.insights/metricAlerts?api-version=2018-03-01"
+            $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroup/$gwResourceGroup/providers/microsoft.insights/metricAlerts?api-version=2024-08-01"
             $alerts = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($alerts.properties.criteria.allOf.metricName -match "CPU|Memory|Storage") {
                 $tempAppGatewayResults += "Good: Alerts are configured to notify you if capacity metrics exceed thresholds for Application Gateway $($appGateway.name)"
@@ -3786,7 +3786,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Use Advisor to monitor Key Vault configuration problems
-            $uri = "https://management.azure.com$($appGateway.id)/providers/microsoft.security/assessments?api-version=2021-05-01"
+            $uri = "https://management.azure.com$($appGateway.id)/providers/microsoft.security/assessments?api-version=2021-06-01"
             $advisor = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($advisor) {
                 $tempAppGatewayResults += "Good: Advisor is used to monitor Key Vault configuration problems for Application Gateway $($appGateway.name)"
@@ -3798,7 +3798,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Set the maximum autoscale instance count to the maximum possible
-            if ($appGateway.autoscaleConfiguration.maxCapacity -match "100") {
+            if ($appGateway.properties.autoscaleConfiguration.maxCapacity -match "100") {
                 $tempAppGatewayResults += "Good: Maximum autoscale instance count is set to the maximum possible for Application Gateway $($appGateway.name)"
                 $appGatewayControlArray[15].Result = 100
             }
