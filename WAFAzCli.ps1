@@ -20,10 +20,10 @@
   The script optionally also outputs a PowerPoint presentation with the results of the assessment.
 
 .NOTES
-  Version:        0.8.5
+  Version:        0.8.6
   Author:         Jordy Groenewoud
   Creation Date:  27/03/2024
-  Last Updated:   22/10/2024
+  Last Updated:   24/10/2024
   
 .EXAMPLE
   .\WAFAzCli.ps1 -Filter "-p-lz"
@@ -3850,6 +3850,153 @@ foreach ($sub in $AllSubscriptions) {
 
     # End region
 
+    ################# Region Load Balancers ##################
+
+    Write-Output "Checking Load Balancers for subscription $($sub.name)..."
+    $LoadBalancers = @()
+
+    $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Network/loadBalancers?api-version=2021-05-01"
+    $LoadBalancers += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 15).value
+    if (!$?) {
+        Write-Error "Unable to retrieve Load Balancers for subscription $($sub.name)." -ErrorAction Continue
+    }
+
+    # Define controls for Load Balancer
+    $LoadBalancerControls = @(
+        "Use Standard SKU for Load Balancer;Reliability;90"
+        "Ensure that Standard Load Balancer is zone-redundant;Reliability;90"
+        "Ensure that the backend pool contains at least two instances;Reliability;90"
+        "Use NAT Gateway instead of outbound rules for production workloads;Reliability;90"
+    )
+
+    $LoadBalancerResults = @()
+    $LoadBalancerResults += ""
+    $LoadBalancerResults += "#########################################"
+    $LoadBalancerResults += "WAF Assessment Results for Load Balancers"
+    $LoadBalancerResults += "#########################################"
+
+    $LoadBalancerTotalAvg = 0
+    $LoadBalancerTotalScore = 0
+
+    $loadBalancerJobs = @()
+    $loadBalancerControlArrayList = @()
+
+    foreach ($loadBalancer in $LoadBalancers) {
+        
+        Write-Output "Checking Load Balancer $($loadBalancer.name)..."
+
+        $loadBalancerJobs += Start-Threadjob -ScriptBlock {
+            
+            $loadBalancer = $using:loadBalancer
+            $headers = $using:headers
+            $sub = $using:sub
+            $tempLoadBalancerResults = @()
+
+            $loadBalancerControlArray = @()
+
+            foreach ($control in $using:LoadBalancerControls) {
+                $loadBalancerCheck = $control.Split(';')
+                $loadBalancerCheckName = $loadBalancerCheck[0]
+                $loadBalancerCheckPillars = $loadBalancerCheck[1].Split(',')
+                $loadBalancerCheckWeight = $loadBalancerCheck[2]
+        
+                $loadBalancerControlArray += [PSCustomObject]@{
+                    Name = $loadBalancerCheckName
+                    Pillars = $loadBalancerCheckPillars
+                    Weight = $loadBalancerCheckWeight
+                    Result = $null
+                }
+            }
+
+            $tempLoadBalancerResults += ""
+            $tempLoadBalancerResults += "----- Load Balancer - $($loadBalancer.name) -----"
+            $tempLoadBalancerResults += ""
+
+            # Use Standard SKU for Load Balancer
+            if ($loadBalancer.sku.name -match "Standard") {
+                $tempLoadBalancerResults += "Good: Standard SKU is used for Load Balancer $($loadBalancer.name)"
+                $loadBalancerControlArray[0].Result = 100
+            }
+            else {
+                $tempLoadBalancerResults += "Bad: Standard SKU is NOT used for Load Balancer $($loadBalancer.name)"
+                $loadBalancerControlArray[0].Result = 0
+            }
+
+            # Ensure that Standard Load Balancer is zone-redundant
+            if ($loadBalancer.zones) {
+                $tempLoadBalancerResults += "Good: Standard Load Balancer is zone-redundant for Load Balancer $($loadBalancer.name)"
+                $loadBalancerControlArray[1].Result = 100
+            }
+            else {
+                $tempLoadBalancerResults += "Bad: Standard Load Balancer is NOT zone-redundant for Load Balancer $($loadBalancer.name)"
+                $loadBalancerControlArray[1].Result = 0
+            }
+
+            # Ensure that the backend pool contains at least two instances
+            if ($loadBalancer.properties.backendAddressPools.properties.backendAddresses.count -ge 2) {
+                $tempLoadBalancerResults += "Good: Backend pool contains at least two instances for Load Balancer $($loadBalancer.name)"
+                $loadBalancerControlArray[2].Result = 100
+            }
+            else {
+                $tempLoadBalancerResults += "Bad: Backend pool does NOT contain at least two instances for Load Balancer $($loadBalancer.name)"
+                $loadBalancerControlArray[2].Result = 0
+            }
+
+            # Use NAT Gateway instead of outbound rules for production workloads
+            $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Network/loadBalancers/$($loadBalancer.name)/outboundRules?api-version=2021-05-01"
+            $outboundRules = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            if (!$outboundRules) {
+                $tempLoadBalancerResults += "Good: NAT Gateway is used instead of outbound rules for production workloads for Load Balancer $($loadBalancer.name)"
+                $loadBalancerControlArray[3].Result = 100
+            }
+            else {
+                $tempLoadBalancerResults += "Bad: NAT Gateway is NOT used instead of outbound rules for production workloads for Load Balancer $($loadBalancer.name)"
+                $loadBalancerControlArray[3].Result = 0
+            }
+
+            # Calculate total weight to calculate weighted average
+            $loadBalancerTotalWeight = 0
+            foreach ($control in $loadBalancerControlArray) {
+                $loadBalancerTotalWeight += $control.Weight
+            }
+
+            # Calculate the weighted average for the Load Balancer
+            $loadBalancerScore = $loadBalancerControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
+            $loadBalancerAvgScore = $loadBalancerScore / $loadBalancerTotalWeight
+            $roundedLoadBalancerAvg = [math]::Round($loadBalancerAvgScore, 1)
+
+            $tempLoadBalancerResults += ""
+            $tempLoadBalancerResults += "Load Balancer - $($loadBalancer.name) has an average score of $roundedLoadBalancerAvg %."
+
+            $tempLoadBalancerResults,$loadBalancerControlArray,$loadBalancerScore,$loadBalancerTotalWeight
+        }
+    }
+
+    if ($LoadBalancers.Count -gt 0) {
+        Write-Output "Waiting for Load Balancer checks to complete..."
+
+        foreach ($job in ($loadBalancerJobs | Wait-Job)) {
+            $tempLoadBalancerResults,$loadBalancerControlArray,$loadBalancerScore,$loadBalancerTotalWeight = Receive-Job -Job $job
+            $LoadBalancerResults += $tempLoadBalancerResults
+            $LoadBalancerTotalScore += $loadBalancerScore
+            $loadBalancerControlArrayList += $loadBalancerControlArray
+        }
+
+        $LoadBalancerTotalAvg = $LoadBalancerTotalScore / ($loadBalancerTotalWeight * $LoadBalancers.Count)
+        $roundedLoadBalancerTotalAvg = [math]::Round($LoadBalancerTotalAvg, 1)
+
+        $lateReport += "Total average score for all Load Balancers in subscription $($sub.name) is $roundedLoadBalancerTotalAvg %."
+    }
+    else {
+        $LoadBalancerResults += ""
+        $LoadBalancerResults += "No Load Balancers found for subscription $($sub.name)."
+        $LoadBalancerResults += ""
+    }
+
+    $WAFResults += $LoadBalancerResults
+
+    # End region
+
     ################ Region Score by Pillars #################
 
     $allWeightedAverages = @()
@@ -3936,6 +4083,13 @@ foreach ($sub in $AllSubscriptions) {
         $allAppGatewayWeightedAverages = Get-AllWeightedAveragesPerService($appGatewayControlArrayList)
         foreach ($appGatewayWeightedAverage in $allAppGatewayWeightedAverages) {
             $allWeightedAverages += $appGatewayWeightedAverage
+        }
+    }
+
+    if ($loadBalancerControlArray) {
+        $allLoadBalancerWeightedAverages = Get-AllWeightedAveragesPerService($loadBalancerControlArrayList)
+        foreach ($loadBalancerWeightedAverage in $allLoadBalancerWeightedAverages) {
+            $allWeightedAverages += $loadBalancerWeightedAverage
         }
     }
 
