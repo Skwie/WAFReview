@@ -3997,6 +3997,195 @@ foreach ($sub in $AllSubscriptions) {
 
     # End region
 
+    ################### Region Service Bus ###################
+
+    Write-Output "Checking Service Bus instances for subscription $($sub.name)..."
+    $ServiceBuses = @()
+
+    $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.ServiceBus/namespaces?api-version=2021-06-01"
+    $ServiceBuses += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 15).value
+    if (!$?) {
+        Write-Error "Unable to retrieve Service Bus instances for subscription $($sub.name)." -ErrorAction Continue
+    }
+
+    # Define controls for Service Bus
+    $ServiceBusControls = @(
+        "Connect to Service Bus with the AMQP protocol and use Service Endpoints or Private Endpoints when possible;Reliability,Security;90"
+        "Implement geo-replication on the sender and receiver side to protect against outages and disasters;Reliability;90"
+        "Configure Geo-Disaster;Reliability;90"
+        "Configure Zone Redundancy in the Service Bus namespace;Reliability;90"
+        "Implement high availability for the Service Bus namespace;Reliability;90"
+        "Ensure related messages are delivered in guaranteed order;Reliability;90"
+        "Implement resilience for transient fault handling when sending or receiving messages;Reliability;90"
+        "Implement auto-scaling of messaging units, to ensure that you have enough resources available for your workloads;Reliability;90"
+    )
+
+    $ServiceBusResults = @()
+    $ServiceBusResults += ""
+    $ServiceBusResults += "################################################"
+    $ServiceBusResults += "WAF Assessment Results for Service Bus instances"
+    $ServiceBusResults += "################################################"
+
+    $ServiceBusTotalAvg = 0
+    $ServiceBusTotalScore = 0
+
+    $serviceBusJobs = @()
+    $serviceBusControlArrayList = @()
+
+    foreach ($serviceBus in $ServiceBuses) {
+        
+        Write-Output "Checking Service Bus $($serviceBus.name)..."
+
+        $serviceBusJobs += Start-Threadjob -ScriptBlock {
+            
+            $serviceBus = $using:serviceBus
+            $headers = $using:headers
+            $sub = $using:sub
+            $tempServiceBusResults = @()
+
+            $serviceBusControlArray = @()
+
+            foreach ($control in $using:ServiceBusControls) {
+                $serviceBusCheck = $control.Split(';')
+                $serviceBusCheckName = $serviceBusCheck[0]
+                $serviceBusCheckPillars = $serviceBusCheck[1].Split(',')
+                $serviceBusCheckWeight = $serviceBusCheck[2]
+        
+                $serviceBusControlArray += [PSCustomObject]@{
+                    Name = $serviceBusCheckName
+                    Pillars = $serviceBusCheckPillars
+                    Weight = $serviceBusCheckWeight
+                    Result = $null
+                }
+            }
+
+            $tempServiceBusResults += ""
+            $tempServiceBusResults += "----- Service Bus - $($serviceBus.name) -----"
+            $tempServiceBusResults += ""
+
+            # Connect to Service Bus with the AMQP protocol and use Service Endpoints or Private Endpoints when possible
+            if ($serviceBus.properties.serviceBusEndpoint -match "amqps") {
+                $tempServiceBusResults += "Good: Service Bus is connected with the AMQP protocol for Service Bus $($serviceBus.name)"
+                $serviceBusControlArray[0].Result = 100
+            }
+            else {
+                $tempServiceBusResults += "Bad: Service Bus is NOT connected with the AMQP protocol for Service Bus $($serviceBus.name)"
+                $serviceBusControlArray[0].Result = 0
+            }
+
+            # Implement geo-replication on the sender and receiver side to protect against outages and disasters
+            if ($serviceBus.properties.geoDisasterRecovery.properties.partnerNamespace) {
+                $tempServiceBusResults += "Good: Geo-replication is implemented on the sender and receiver side for Service Bus $($serviceBus.name)"
+                $serviceBusControlArray[1].Result = 100
+            }
+            else {
+                $tempServiceBusResults += "Bad: Geo-replication is NOT implemented on the sender and receiver side for Service Bus $($serviceBus.name)"
+                $serviceBusControlArray[1].Result = 0
+            }
+
+            # Configure Geo-Disaster
+            if ($serviceBus.properties.geoDisasterRecovery.properties.partnerNamespace) {
+                $tempServiceBusResults += "Good: Geo-Disaster is configured for Service Bus $($serviceBus.name)"
+                $serviceBusControlArray[2].Result = 100
+            }
+            else {
+                $tempServiceBusResults += "Bad: Geo-Disaster is NOT configured for Service Bus $($serviceBus.name)"
+                $serviceBusControlArray[2].Result = 0
+            }
+
+            # Configure Zone Redundancy in the Service Bus namespace
+            if ($serviceBus.zones) {
+                $tempServiceBusResults += "Good: Zone Redundancy is configured in the Service Bus namespace for Service Bus $($serviceBus.name)"
+                $serviceBusControlArray[3].Result = 100
+            }
+            else {
+                $tempServiceBusResults += "Bad: Zone Redundancy is NOT configured in the Service Bus namespace for Service Bus $($serviceBus.name)"
+                $serviceBusControlArray[3].Result = 0
+            }
+
+            # Implement high availability for the Service Bus namespace
+            if ($serviceBus.properties.availabilityZones) {
+                $tempServiceBusResults += "Good: High availability is implemented for the Service Bus namespace for Service Bus $($serviceBus.name)"
+                $serviceBusControlArray[4].Result = 100
+            }
+            else {
+                $tempServiceBusResults += "Bad: High availability is NOT implemented for the Service Bus namespace for Service Bus $($serviceBus.name)"
+                $serviceBusControlArray[4].Result = 0
+            }
+
+            # Ensure related messages are delivered in guaranteed order
+            if ($serviceBus.properties.requiresDuplicateDetection -match "True") {
+                $tempServiceBusResults += "Good: Related messages are delivered in guaranteed order for Service Bus $($serviceBus.name)"
+                $serviceBusControlArray[5].Result = 100
+            }
+            else {
+                $tempServiceBusResults += "Bad: Related messages are NOT delivered in guaranteed order for Service Bus $($serviceBus.name)"
+                $serviceBusControlArray[5].Result = 0
+            }
+
+            # Implement resilience for transient fault handling when sending or receiving messages
+            if ($serviceBus.properties.requiresSession -match "True") {
+                $tempServiceBusResults += "Good: Resilience is implemented for transient fault handling when sending or receiving messages for Service Bus $($serviceBus.name)"
+                $serviceBusControlArray[6].Result = 100
+            }
+            else {
+                $tempServiceBusResults += "Bad: Resilience is NOT implemented for transient fault handling when sending or receiving messages for Service Bus $($serviceBus.name)"
+                $serviceBusControlArray[6].Result = 0
+            }
+
+            # Implement auto-scaling of messaging units, to ensure that you have enough resources available for your workloads
+            if ($serviceBus.properties.autoScale.properties.maximumThroughputUnits -gt $serviceBus.properties.autoScale.properties.currentThroughputUnits) {
+                $tempServiceBusResults += "Good: Auto-scaling of messaging units is implemented for Service Bus $($serviceBus.name)"
+                $serviceBusControlArray[7].Result = 100
+            }
+            else {
+                $tempServiceBusResults += "Bad: Auto-scaling of messaging units is NOT implemented for Service Bus $($serviceBus.name)"
+                $serviceBusControlArray[7].Result = 0
+            }
+
+            # Calculate total weight to calculate weighted average
+            $serviceBusTotalWeight = 0
+            foreach ($control in $serviceBusControlArray) {
+                $serviceBusTotalWeight += $control.Weight
+            }
+
+            # Calculate the weighted average for the Service Bus
+            $serviceBusScore = $serviceBusControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
+            $serviceBusAvgScore = $serviceBusScore / $serviceBusTotalWeight
+            $roundedServiceBusAvg = [math]::Round($serviceBusAvgScore, 1)
+
+            $tempServiceBusResults += ""
+            $tempServiceBusResults += "Service Bus - $($serviceBus.name) has an average score of $roundedServiceBusAvg %."
+
+            $tempServiceBusResults,$serviceBusControlArray,$serviceBusScore,$serviceBusTotalWeight
+        }
+    }
+
+    if ($ServiceBuses.Count -gt 0) {
+        Write-Output "Waiting for Service Bus checks to complete..."
+
+        foreach ($job in ($serviceBusJobs | Wait-Job)) {
+            $tempServiceBusResults,$serviceBusControlArray,$serviceBusScore,$serviceBusTotalWeight = Receive-Job -Job $job
+            $ServiceBusResults += $tempServiceBusResults
+            $ServiceBusTotalScore += $serviceBusScore
+            $serviceBusControlArrayList += $serviceBusControlArray
+        }
+
+        $ServiceBusTotalAvg = $ServiceBusTotalScore / ($serviceBusTotalWeight * $ServiceBuses.Count)
+        $roundedServiceBusTotalAvg = [math]::Round($ServiceBusTotalAvg, 1)
+
+        $lateReport += "Total average score for all Service Bus instances in subscription $($sub.name) is $roundedServiceBusTotalAvg %."
+    }
+    else {
+        $ServiceBusResults += ""
+        $ServiceBusResults += "No Service Bus instances found for subscription $($sub.name)."
+        $ServiceBusResults += ""
+    }
+
+    $WAFResults += $ServiceBusResults
+
+    # End region
+
     ################ Region Score by Pillars #################
 
     $allWeightedAverages = @()
@@ -4090,6 +4279,13 @@ foreach ($sub in $AllSubscriptions) {
         $allLoadBalancerWeightedAverages = Get-AllWeightedAveragesPerService($loadBalancerControlArrayList)
         foreach ($loadBalancerWeightedAverage in $allLoadBalancerWeightedAverages) {
             $allWeightedAverages += $loadBalancerWeightedAverage
+        }
+    }
+
+    if ($serviceBusControlArray) {
+        $allServiceBusWeightedAverages = Get-AllWeightedAveragesPerService($serviceBusControlArrayList)
+        foreach ($serviceBusWeightedAverage in $allServiceBusWeightedAverages) {
+            $allWeightedAverages += $serviceBusWeightedAverage
         }
     }
 
