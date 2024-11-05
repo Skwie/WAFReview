@@ -3943,7 +3943,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Use NAT Gateway instead of outbound rules for production workloads
-            $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Network/loadBalancers/$($loadBalancer.name)/outboundRules?api-version=2021-05-01"
+            $uri = "https://management.azure.com$($loadBalancer.id)/outboundRules?api-version=2021-05-01"
             $outboundRules = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if (!$outboundRules) {
                 $tempLoadBalancerResults += "Good: NAT Gateway is used instead of outbound rules for production workloads for Load Balancer $($loadBalancer.name)"
@@ -4002,7 +4002,7 @@ foreach ($sub in $AllSubscriptions) {
     Write-Output "Checking Service Bus instances for subscription $($sub.name)..."
     $ServiceBuses = @()
 
-    $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.ServiceBus/namespaces?api-version=2021-06-01"
+    $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.ServiceBus/namespaces?api-version=2024-01-01"
     $ServiceBuses += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 15).value
     if (!$?) {
         Write-Error "Unable to retrieve Service Bus instances for subscription $($sub.name)." -ErrorAction Continue
@@ -4064,7 +4064,7 @@ foreach ($sub in $AllSubscriptions) {
             $tempServiceBusResults += ""
 
             # Connect to Service Bus with the AMQP protocol and use Service Endpoints or Private Endpoints when possible
-            if ($serviceBus.properties.serviceBusEndpoint -match "amqps") {
+            if ($serviceBus.properties.serviceBusEndpoint) {
                 $tempServiceBusResults += "Good: Service Bus is connected with the AMQP protocol for Service Bus $($serviceBus.name)"
                 $serviceBusControlArray[0].Result = 100
             }
@@ -4074,17 +4074,19 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Implement geo-replication on the sender and receiver side to protect against outages and disasters
-            if ($serviceBus.properties.geoDisasterRecovery.properties.partnerNamespace) {
-                $tempServiceBusResults += "Good: Geo-replication is implemented on the sender and receiver side for Service Bus $($serviceBus.name)"
+            if ($serviceBus.properties.geoDataReplication.locations.replicaState -match "Ready") {
+                $tempServiceBusResults += "Good: Geo-replication is implemented for Service Bus $($serviceBus.name)"
                 $serviceBusControlArray[1].Result = 100
             }
             else {
-                $tempServiceBusResults += "Bad: Geo-replication is NOT implemented on the sender and receiver side for Service Bus $($serviceBus.name)"
+                $tempServiceBusResults += "Bad: Geo-replication is NOT implemented for Service Bus $($serviceBus.name)"
                 $serviceBusControlArray[1].Result = 0
             }
 
             # Configure Geo-Disaster
-            if ($serviceBus.properties.geoDisasterRecovery.properties.partnerNamespace) {
+            $uri = "https://management.azure.com$($serviceBus.id)/disasterRecoveryConfigs?api-version=2024-01-01"
+            $geoDisaster = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            if ($geoDisaster) {
                 $tempServiceBusResults += "Good: Geo-Disaster is configured for Service Bus $($serviceBus.name)"
                 $serviceBusControlArray[2].Result = 100
             }
@@ -4094,7 +4096,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Configure Zone Redundancy in the Service Bus namespace
-            if ($serviceBus.zones) {
+            if ($serviceBus.zoneRedundant -match "True") {
                 $tempServiceBusResults += "Good: Zone Redundancy is configured in the Service Bus namespace for Service Bus $($serviceBus.name)"
                 $serviceBusControlArray[3].Result = 100
             }
@@ -4104,7 +4106,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Implement high availability for the Service Bus namespace
-            if ($serviceBus.properties.availabilityZones) {
+            if ($serviceBus.sku.tier -match "Premium") {
                 $tempServiceBusResults += "Good: High availability is implemented for the Service Bus namespace for Service Bus $($serviceBus.name)"
                 $serviceBusControlArray[4].Result = 100
             }
@@ -4114,7 +4116,9 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Ensure related messages are delivered in guaranteed order
-            if ($serviceBus.properties.requiresDuplicateDetection -match "True") {
+            $uri = "https://management.azure.com$($serviceBus.id)/queues?api-version=2024-01-01"
+            $queues = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            if ($queues.properties.requiresDuplicateDetection -match "True") {
                 $tempServiceBusResults += "Good: Related messages are delivered in guaranteed order for Service Bus $($serviceBus.name)"
                 $serviceBusControlArray[5].Result = 100
             }
@@ -4124,7 +4128,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Implement resilience for transient fault handling when sending or receiving messages
-            if ($serviceBus.properties.requiresSession -match "True") {
+            if ($queues.properties.requiresSession -match "True") {
                 $tempServiceBusResults += "Good: Resilience is implemented for transient fault handling when sending or receiving messages for Service Bus $($serviceBus.name)"
                 $serviceBusControlArray[6].Result = 100
             }
@@ -4134,7 +4138,9 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Implement auto-scaling of messaging units, to ensure that you have enough resources available for your workloads
-            if ($serviceBus.properties.autoScale.properties.maximumThroughputUnits -gt $serviceBus.properties.autoScale.properties.currentThroughputUnits) {
+            $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Insights/autoScaleSettings?api-version=2021-05-01-preview"
+            $autoScale = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value | Where-Object { $_.properties.targetResourceUri -match $serviceBus.id }
+            if ($autoScale.properties.enabled -match "True") {
                 $tempServiceBusResults += "Good: Auto-scaling of messaging units is implemented for Service Bus $($serviceBus.name)"
                 $serviceBusControlArray[7].Result = 100
             }
