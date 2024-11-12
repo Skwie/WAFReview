@@ -20,10 +20,10 @@
   The script optionally also outputs a PowerPoint presentation with the results of the assessment.
 
 .NOTES
-  Version:        0.8.6
+  Version:        0.8.7
   Author:         Jordy Groenewoud
   Creation Date:  27/03/2024
-  Last Updated:   24/10/2024
+  Last Updated:   12/11/2024
   
 .EXAMPLE
   .\WAFAzCli.ps1 -Filter "-p-lz"
@@ -4197,7 +4197,7 @@ foreach ($sub in $AllSubscriptions) {
     Write-Output "Checking Log Analytics workspaces for subscription $($sub.name)..."
     $LogAnalyticsWorkspaces = @()
 
-    $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.OperationalInsights/workspaces?api-version=2021-03-01-preview"
+    $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.OperationalInsights/workspaces?api-version=2023-09-01"
     $LogAnalyticsWorkspaces += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 15).value
     if (!$?) {
         Write-Error "Unable to retrieve Log Analytics workspaces for subscription $($sub.name)." -ErrorAction Continue
@@ -4511,6 +4511,13 @@ foreach ($sub in $AllSubscriptions) {
         $allServiceBusWeightedAverages = Get-AllWeightedAveragesPerService($serviceBusControlArrayList)
         foreach ($serviceBusWeightedAverage in $allServiceBusWeightedAverages) {
             $allWeightedAverages += $serviceBusWeightedAverage
+        }
+    }
+
+    if ($logAnalyticsControlArray) {
+        $allLogAnalyticsWeightedAverages = Get-AllWeightedAveragesPerService($logAnalyticsControlArrayList)
+        foreach ($logAnalyticsWeightedAverage in $allLogAnalyticsWeightedAverages) {
+            $allWeightedAverages += $logAnalyticsWeightedAverage
         }
     }
 
