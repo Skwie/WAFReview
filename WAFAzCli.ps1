@@ -4206,7 +4206,6 @@ foreach ($sub in $AllSubscriptions) {
     # Define controls for Log Analytics
     $LogAnalyticsControls = @(
         "Deploy Log Analytics workspaces into a region that supports Data Resilience;Reliability;90"
-        "Use Data Collection Endpoints in the same region as the Log Analytics workspace;Reliability;90"
         "Use Azure Storage redundency for Log Analytics workspace;Reliability;90"
         "Use Log Analytics workspace insights to monitor and analyze data;Reliability;90"
         "Configure Log query auditing to track which users are running queries;Security;90"
@@ -4214,7 +4213,6 @@ foreach ($sub in $AllSubscriptions) {
         "Use Entra ID instead of API keys for workspace API access;Security;90"
         "Set access control mode to Use Resource or Workspace Permissions;Security;90"
         "Configure Data Retention and archiving;Cost Optimization;90"
-        "Create alerts when data collection is high;Cost Optimization;90"
     )
 
     $LogAnalyticsResults = @()
@@ -4261,7 +4259,7 @@ foreach ($sub in $AllSubscriptions) {
             $tempLogAnalyticsResults += ""
 
             # Deploy Log Analytics workspaces into a region that supports Data Resilience
-            if ($logAnalytics.properties.dataResidency.properties.dataResidencyMode -match "DataResilience") {
+            if ($logAnalytics.location -match "westeurope" -or $logAnalytics.location -match "northeurope") {
                 $tempLogAnalyticsResults += "Good: Log Analytics workspace is deployed into a region that supports Data Resilience for Log Analytics $($logAnalytics.name)"
                 $logAnalyticsControlArray[0].Result = 100
             }
@@ -4270,34 +4268,24 @@ foreach ($sub in $AllSubscriptions) {
                 $logAnalyticsControlArray[0].Result = 0
             }
 
-            # Use Data Collection Endpoints in the same region as the Log Analytics workspace
-            if ($logAnalytics.properties.dataCollectionEndpoints.properties.region -match $logAnalytics.location) {
-                $tempLogAnalyticsResults += "Good: Data Collection Endpoints are used in the same region as the Log Analytics workspace for Log Analytics $($logAnalytics.name)"
+            # Use Azure Storage redundency for Log Analytics workspace
+            if ($logAnalytics.properties.features.enableDataExport) {
+                $tempLogAnalyticsResults += "Good: Azure Storage redundancy is used for Log Analytics workspace $($logAnalytics.name)"
                 $logAnalyticsControlArray[1].Result = 100
             }
             else {
-                $tempLogAnalyticsResults += "Bad: Data Collection Endpoints are NOT used in the same region as the Log Analytics workspace for Log Analytics $($logAnalytics.name)"
-                $logAnalyticsControlArray[1].Result = 0
-            }
-
-            # Use Azure Storage redundency for Log Analytics workspace
-            if ($logAnalytics.properties.storageAccount.properties.redundancy -match "GeoRedundant") {
-                $tempLogAnalyticsResults += "Good: Azure Storage redundancy is used for Log Analytics workspace $($logAnalytics.name)"
-                $logAnalyticsControlArray[2].Result = 100
-            }
-            else {
                 $tempLogAnalyticsResults += "Bad: Azure Storage redundancy is NOT used for Log Analytics workspace $($logAnalytics.name)"
-                $logAnalyticsControlArray[2].Result = 0
+                $logAnalyticsControlArray[1].Result = 0
             }
 
             # Use Log Analytics workspace insights to monitor and analyze data
             if ($logAnalytics.properties.features.properties.workspaceInsights -match "Enabled") {
                 $tempLogAnalyticsResults += "Good: Log Analytics workspace insights are used to monitor and analyze data for Log Analytics $($logAnalytics.name)"
-                $logAnalyticsControlArray[3].Result = 100
+                $logAnalyticsControlArray[2].Result = 100
             }
             else {
                 $tempLogAnalyticsResults += "Bad: Log Analytics workspace insights are NOT used to monitor and analyze data for Log Analytics $($logAnalytics.name)"
-                $logAnalyticsControlArray[3].Result = 0
+                $logAnalyticsControlArray[2].Result = 0
             }
 
             # Configure Log query auditing to track which users are running queries
@@ -4305,67 +4293,51 @@ foreach ($sub in $AllSubscriptions) {
             $advisor = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($advisor) {
                 $tempLogAnalyticsResults += "Good: Log query auditing is configured to track which users are running queries for Log Analytics $($logAnalytics.name)"
-                $logAnalyticsControlArray[4].Result = 100
+                $logAnalyticsControlArray[3].Result = 100
             }
             else {
                 $tempLogAnalyticsResults += "Bad: Log query auditing is NOT configured to track which users are running queries for Log Analytics $($logAnalytics.name)"
-                $logAnalyticsControlArray[4].Result = 0
+                $logAnalyticsControlArray[3].Result = 0
             }
 
             # Use Private Link to secure Log Analytics workspace
-            $uri = "https://management.azure.com$($logAnalytics.id)/privateLinkConnections?api-version=2023-09-01"
-            $privateLink = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
-            if ($privateLink) {
+            if ($logAnalytics.privateLinkScopedResources) {
                 $tempLogAnalyticsResults += "Good: Private Link is used to secure Log Analytics workspace $($logAnalytics.name)"
-                $logAnalyticsControlArray[5].Result = 100
+                $logAnalyticsControlArray[4].Result = 100
             }
             else {
                 $tempLogAnalyticsResults += "Bad: Private Link is NOT used to secure Log Analytics workspace $($logAnalytics.name)"
-                $logAnalyticsControlArray[5].Result = 0
+                $logAnalyticsControlArray[4].Result = 0
             }
 
             # Use Entra ID instead of API keys for workspace API access
-            $uri = "https://management.azure.com$($logAnalytics.id)/keys?api-version=2023-09-01"
-            $keys = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
-            if ($keys.properties.keyType -match "Entra") {
+            if ($logAnalytics.properties.features.disableLocalAuth -match "True") {
                 $tempLogAnalyticsResults += "Good: Entra ID is used instead of API keys for workspace API access for Log Analytics $($logAnalytics.name)"
-                $logAnalyticsControlArray[6].Result = 100
+                $logAnalyticsControlArray[5].Result = 100
             }
             else {
                 $tempLogAnalyticsResults += "Bad: Entra ID is NOT used instead of API keys for workspace API access for Log Analytics $($logAnalytics.name)"
-                $logAnalyticsControlArray[6].Result = 0
+                $logAnalyticsControlArray[5].Result = 0
             }
 
             # Set access control mode to Use Resource or Workspace Permissions
-            if ($logAnalytics.properties.accessControl.properties.mode -match "Resource") {
+            if ($logAnalytics.properties.features.enableLogAccessUsingOnlyResourcePermissions -match "True") {
                 $tempLogAnalyticsResults += "Good: Access control mode is set to Use Resource or Workspace Permissions for Log Analytics $($logAnalytics.name)"
-                $logAnalyticsControlArray[7].Result = 100
+                $logAnalyticsControlArray[6].Result = 100
             }
             else {
                 $tempLogAnalyticsResults += "Bad: Access control mode is NOT set to Use Resource or Workspace Permissions for Log Analytics $($logAnalytics.name)"
-                $logAnalyticsControlArray[7].Result = 0
+                $logAnalyticsControlArray[6].Result = 0
             }
 
             # Configure Data Retention and archiving
             if ($logAnalytics.properties.retentionInDays -ge 30) {
                 $tempLogAnalyticsResults += "Good: Data Retention and archiving is configured for Log Analytics $($logAnalytics.name)"
-                $logAnalyticsControlArray[8].Result = 100
+                $logAnalyticsControlArray[7].Result = 100
             }
             else {
                 $tempLogAnalyticsResults += "Bad: Data Retention and archiving is NOT configured for Log Analytics $($logAnalytics.name)"
-                $logAnalyticsControlArray[8].Result = 0
-            }
-
-            # Create alerts when data collection is high
-            $uri = "https://management.azure.com$($logAnalytics.id)/providers/microsoft.insights/metricAlerts?api-version=2023-09-01"
-            $alerts = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
-            if ($alerts) {
-                $tempLogAnalyticsResults += "Good: Alerts are created when data collection is high for Log Analytics $($logAnalytics.name)"
-                $logAnalyticsControlArray[9].Result = 100
-            }
-            else {
-                $tempLogAnalyticsResults += "Bad: Alerts are NOT created when data collection is high for Log Analytics $($logAnalytics.name)"
-                $logAnalyticsControlArray[9].Result = 0
+                $logAnalyticsControlArray[7].Result = 0
             }
 
             # Calculate total weight to calculate weighted average
