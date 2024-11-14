@@ -4313,7 +4313,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Use Private Link to secure Log Analytics workspace
-            $uri = "https://management.azure.com$($logAnalytics.id)/privateLinkConnections?api-version=2021-03-01-preview"
+            $uri = "https://management.azure.com$($logAnalytics.id)/privateLinkConnections?api-version=2023-09-01"
             $privateLink = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($privateLink) {
                 $tempLogAnalyticsResults += "Good: Private Link is used to secure Log Analytics workspace $($logAnalytics.name)"
@@ -4325,7 +4325,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Use Entra ID instead of API keys for workspace API access
-            $uri = "https://management.azure.com$($logAnalytics.id)/keys?api-version=2021-03-01-preview"
+            $uri = "https://management.azure.com$($logAnalytics.id)/keys?api-version=2023-09-01"
             $keys = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($keys.properties.keyType -match "Entra") {
                 $tempLogAnalyticsResults += "Good: Entra ID is used instead of API keys for workspace API access for Log Analytics $($logAnalytics.name)"
@@ -4357,7 +4357,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Create alerts when data collection is high
-            $uri = "https://management.azure.com$($logAnalytics.id)/providers/microsoft.insights/metricAlerts?api-version=2021-05-01-preview"
+            $uri = "https://management.azure.com$($logAnalytics.id)/providers/microsoft.insights/metricAlerts?api-version=2023-09-01"
             $alerts = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if ($alerts) {
                 $tempLogAnalyticsResults += "Good: Alerts are created when data collection is high for Log Analytics $($logAnalytics.name)"
