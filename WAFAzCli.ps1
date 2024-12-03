@@ -242,7 +242,12 @@ foreach ($sub in $AllSubscriptions) {
             
             # Turn on soft delete for blob data
             $uri = "https://management.azure.com$($strg.id)/blobServices/default?api-version=2023-05-01"
-            $BlobProperties = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
+            try {
+                $BlobProperties = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
+            }
+            catch {
+                $BlobProperties = $null
+            }
             if ($BlobProperties.Count -gt 0) {
                 if ($BlobProperties.deleteRetentionPolicy.enabled) {
                     $tempStorageResults += "Good: Soft Delete is active for $($strg.name)"
@@ -404,7 +409,7 @@ foreach ($sub in $AllSubscriptions) {
                 $strgControlArray[11].Result = 100
             }
             else {
-                $tempStorageResults += "Informational: Storage account $($strg.name) has an access tier of '$($strg.accessTier)'."
+                $tempStorageResults += "Informational: Storage account $($strg.name) has an access tier of '$($strg.properties.accessTier)'."
                 $strgControlArray[11].Result = 100
             }
             
