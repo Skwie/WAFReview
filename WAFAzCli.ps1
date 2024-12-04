@@ -1877,7 +1877,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Implement network security groups and firewalls to control access to your database
-            $uri = "https://management.azure.com$($server.id)/firewallRules?api-version=2022-12-01"
+            $uri = "https://management.azure.com$($server.id)/firewallRules?api-version=2017-12-01"
             $firewallRules = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
             if (!$?) {
                 $tempPostgreSQLResults += "Informational: Private Access is enabled for PostgreSQL server $($server.name), so the firewall rules are not evaluated."
@@ -1948,7 +1948,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Check for PostgreSQL Log Retention Period
-            $uri = "https://management.azure.com$($server.id)/configurations/logfiles.retention_days?api-version=2022-12-01"
+            $uri = "https://management.azure.com$($server.id)/configurations/logfiles.retention_days?api-version=2017-12-01"
             $logretention = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties.value
             if ($logretention.value -ge 7) {
                 $tempPostgreSQLResults += "Good: Log retention period is sufficient for PostgreSQL server $($server.name)"
