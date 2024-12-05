@@ -1810,8 +1810,8 @@ foreach ($sub in $AllSubscriptions) {
             if ($server.type -match 'Microsoft.DBforPostgreSQL/servers') {
                 $serverStatus = "single"
                 $tempPostgreSQLResults += ""
-                $tempPostgreSQLResults += "WARNING"
-                $tempPostgreSQLResults += "$($server.name) is a PostgreSQL single server. Single server is due to be deprecated in March 2025. Consider migrating to a flexible server."
+                $tempPostgreSQLResults += "!WARNING!"
+                $tempPostgreSQLResults += "$($server.name) is a PostgreSQL single server. Single server is due to be deprecated in March 2025. Migrate to a flexible server ASAP."
             }
             else {
                 $serverStatus = "flexible"
@@ -1948,14 +1948,20 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Check for PostgreSQL Log Retention Period
-            $uri = "https://management.azure.com$($server.id)/configurations/logfiles.retention_days?api-version=2017-12-01"
-            $logretention = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties.value
-            if ($logretention.value -ge 7) {
-                $tempPostgreSQLResults += "Good: Log retention period is sufficient for PostgreSQL server $($server.name)"
-                $postgreSQLControlArray[7].Result = 100
+            if ($serverStatus -match 'flexible') {
+                $uri = "https://management.azure.com$($server.id)/configurations/logfiles.retention_days?api-version=2017-12-01"
+                $logretention = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties.value
+                if ($logretention.value -ge 7) {
+                    $tempPostgreSQLResults += "Good: Log retention period is sufficient for PostgreSQL server $($server.name)"
+                    $postgreSQLControlArray[7].Result = 100
+                }
+                else {
+                    $tempPostgreSQLResults += "Bad: Log retention period is NOT sufficient for PostgreSQL server $($server.name)"
+                    $postgreSQLControlArray[7].Result = 0
+                }
             }
             else {
-                $tempPostgreSQLResults += "Bad: Log retention period is NOT sufficient for PostgreSQL server $($server.name)"
+                $tempPostgreSQLResults += "Bad: Log retention cannot be checked for PostgreSQL single server $($server.name). Please upgrade to a flexible server ASAP."
                 $postgreSQLControlArray[7].Result = 0
             }
 
