@@ -103,9 +103,9 @@ function New-RetryCommand
     $retrycount = 0
     $done = $false
 
-    while (-not $done) {
+    while (-not $done -and $retrycount -lt $maxretries) {
         try {
-            Invoke-Command -ScriptBlock $command @arguments
+            & $command @arguments
             $done = $true
         } 
         catch {
