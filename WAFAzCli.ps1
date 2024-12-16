@@ -105,7 +105,7 @@ function New-RetryCommand
 
     while (-not $done) {
         try {
-            Invoke-Command $command @arguments
+            Invoke-Command -ScriptBlock $command @arguments
             $done = $true
         } 
         catch {
@@ -127,7 +127,7 @@ function New-RetryCommand
 $Error.Clear()
 
 if (!$azsession) {
-    $azsession = New-RetryCommand -command "az login" -arguments @{}
+    $azsession = New-RetryCommand -command {az login} -arguments @{}
 }
 if (!$azsession) {
     Write-Output "Unable to authenticate with Azure. Script execution canceled."
