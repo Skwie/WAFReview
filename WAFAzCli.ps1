@@ -89,6 +89,37 @@ function Get-AllWeightedAveragesPerService($controlArray) {
     return $allSrvcWeightedAverages
 }
 
+function New-RetryCommand
+{
+    param (
+        [Parameter(Mandatory=$true)][string]$command, 
+        [Parameter(Mandatory=$true)][hashtable]$arguments, 
+        [Parameter(Mandatory=$false)][int]$maxretries = 5, 
+        [Parameter(Mandatory=$false)][int]$delay = 2
+    )
+    
+    $arguments.ErrorAction = "Stop"
+    
+    $retrycount = 0
+    $done = $false
+
+    while (-not $done) {
+        try {
+            Invoke-Command $command @arguments
+            $done = $true
+        } 
+        catch {
+            if ($retrycount -ge $maxretries) {
+                Write-Error ("Command $($command) failed the maximum number of $($maxretries) times.") -ErrorAction Continue
+            } else {
+                Write-Verbose ("Command $($command) did not complete successfully. Retrying in $($delay) seconds.")
+                Start-Sleep $delay
+                $retrycount++
+            }
+        }
+    }
+}
+
 # End region
 
 ################# Region Setup #####################
@@ -96,17 +127,22 @@ function Get-AllWeightedAveragesPerService($controlArray) {
 $Error.Clear()
 
 if (!$azsession) {
-    try {
-        $azsession = az login
-    }
-    catch {
-        Write-Output "Unable to login to Az CLI. Make sure the Az module is installed."
-        throw
-    }
+    $azsession = New-RetryCommand -command "az login" -arguments @{}
+}
+if (!$azsession) {
+    Write-Output "Unable to authenticate with Azure. Script execution canceled."
+    throw
 }
 
 # setup headers for API calls
-$token = (az account get-access-token | ConvertFrom-Json -Depth 10).accessToken
+try {
+    $token = (New-RetryCommand -command "az account get-access-token" -arguments @{} | ConvertFrom-Json -Depth 10).accessToken
+}
+catch {
+    Write-Output "Unable to retrieve Azure access token."
+    throw
+}
+
 $headers = @{
     'Authorization' = "Bearer $token"
 }
@@ -164,10 +200,7 @@ foreach ($sub in $AllSubscriptions) {
     Write-Output "Checking Storage Accounts for subscription $($sub.name)..."
 
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Storage/storageAccounts?api-version=2023-05-01"
-    $StorageAccounts = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
-    if (!$?) {
-        Write-Error "Unable to retrieve storage accounts for subscription $($sub.name)." -ErrorAction Continue
-    }
+    $StorageAccounts = ((New-RetryCommand -command "Invoke-Webrequest" -arguments @{ "-uri" = $uri; "-headers" = $headers; "-method" = "Get" }).Content | ConvertFrom-Json -Depth 10).value
 
     # Define the checks to be done as well as their related pillars and weight
     $StorageControls = @(
