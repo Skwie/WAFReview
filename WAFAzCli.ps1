@@ -94,27 +94,28 @@ function New-RetryCommand
     param (
         [Parameter(Mandatory=$true)][string]$command, 
         [Parameter(Mandatory=$true)][hashtable]$arguments, 
-        [Parameter(Mandatory=$false)][int]$maxretries = 5, 
+        [Parameter(Mandatory=$false)][int]$maxRetries = 5, 
         [Parameter(Mandatory=$false)][int]$delay = 2
     )
     
     $arguments.ErrorAction = "Stop"
     
-    $retrycount = 0
+    $retryCount = 0
     $done = $false
+    $scriptBlock = [ScriptBlock]::Create($command)
 
-    while (-not $done -and $retrycount -lt $maxretries) {
+    while (-not $done -and $retryCount -lt $maxRetries) {
         try {
-            & $command @arguments
+            & $scriptBlock @arguments
             $done = $true
         } 
         catch {
-            if ($retrycount -ge $maxretries) {
-                Write-Error ("Command $($command) failed the maximum number of $($maxretries) times.") -ErrorAction Continue
+            if ($retryCount -ge $maxRetries) {
+                Write-Error ("Command $($command) failed the maximum number of $($maxRetries) times.") -ErrorAction Continue
             } else {
                 Write-Verbose ("Command $($command) did not complete successfully. Retrying in $($delay) seconds.")
                 Start-Sleep $delay
-                $retrycount++
+                $retryCount++
             }
         }
     }
