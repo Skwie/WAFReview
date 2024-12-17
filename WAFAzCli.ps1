@@ -128,7 +128,7 @@ function New-RetryCommand
 $Error.Clear()
 
 if (!$azsession) {
-    $azsession = New-RetryCommand -command "az login" -arguments @{}
+    $azsession = New-RetryCommand -command "az login" -args @{}
 }
 if (!$azsession) {
     Write-Output "Unable to authenticate with Azure. Script execution canceled."
@@ -137,7 +137,7 @@ if (!$azsession) {
 
 # setup headers for API calls
 try {
-    $token = (New-RetryCommand -command "az account get-access-token" -arguments @{} | ConvertFrom-Json -Depth 10).accessToken
+    $token = (New-RetryCommand -command "az account get-access-token" -args @{} | ConvertFrom-Json -Depth 10).accessToken
 }
 catch {
     Write-Output "Unable to retrieve Azure access token."
@@ -201,7 +201,7 @@ foreach ($sub in $AllSubscriptions) {
     Write-Output "Checking Storage Accounts for subscription $($sub.name)..."
 
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Storage/storageAccounts?api-version=2023-05-01"
-    $StorageAccounts = ((New-RetryCommand -command "Invoke-Webrequest" -arguments @{ uri = $uri; headers = $headers; method = "Get" }).Content | ConvertFrom-Json -Depth 10).value
+    $StorageAccounts = ((New-RetryCommand -command "Invoke-Webrequest" -args @{ uri = $uri; headers = $headers; method = "Get" }).Content | ConvertFrom-Json -Depth 10).value
 
     # Define the checks to be done as well as their related pillars and weight
     $StorageControls = @(
