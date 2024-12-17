@@ -93,12 +93,12 @@ function New-RetryCommand
 {
     param (
         [Parameter(Mandatory=$true)][string]$command, 
-        [Parameter(Mandatory=$true)][hashtable]$arguments, 
+        [Parameter(Mandatory=$true)][hashtable]$args, 
         [Parameter(Mandatory=$false)][int]$maxRetries = 5, 
         [Parameter(Mandatory=$false)][int]$delay = 2
     )
     
-    $arguments.ErrorAction = "Stop"
+    $args.ErrorAction = "Stop"
     
     $retryCount = 0
     $done = $false
@@ -106,7 +106,7 @@ function New-RetryCommand
 
     while (-not $done -and $retryCount -lt $maxRetries) {
         try {
-            & $scriptBlock @arguments
+            & $scriptBlock @args
             $done = $true
         } 
         catch {
