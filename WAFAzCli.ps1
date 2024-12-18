@@ -93,13 +93,13 @@ function New-RetryCommand
 {
     param (
         [Parameter(Mandatory=$true)][string]$command, 
-        [Parameter(Mandatory=$true)][hashtable]$args, 
-        [Parameter(Mandatory=$false)][int]$maxRetries = 5, 
-        [Parameter(Mandatory=$false)][int]$delay = 2
+        [Parameter(Mandatory=$true)][hashtable]$args
     )
     
     $args.ErrorAction = "Stop"
-    
+    $maxRetries = 5
+    $delay = 2
+
     $retryCount = 0
     $done = $false
     $scriptBlock = [ScriptBlock]::Create($command)
@@ -114,6 +114,36 @@ function New-RetryCommand
                 Write-Error ("Command $($command) failed the maximum number of $($maxRetries) times.") -ErrorAction Continue
             } else {
                 Write-Verbose ("Command $($command) did not complete successfully. Retrying in $($delay) seconds.")
+                Start-Sleep $delay
+                $retryCount++
+            }
+        }
+    }
+}
+
+function New-ApiRetryCommand
+{
+    param (
+        [Parameter(Mandatory=$true)][string]$uri, 
+        [Parameter(Mandatory=$true)][hashtable]$headers
+    )
+    
+    $maxRetries = 5
+    $delay = 2
+
+    $retryCount = 0
+    $done = $false
+
+    while (-not $done -and $retryCount -lt $maxRetries) {
+        try {
+            Invoke-WebRequest -Uri $uri -Headers $headers -Method Get
+            $done = $true
+        } 
+        catch {
+            if ($retryCount -ge $maxRetries) {
+                Write-Error ("API call failed the maximum number of $($maxRetries) times.") -ErrorAction Continue
+            } else {
+                Write-Verbose ("API call did not complete successfully. Retrying in $($delay) seconds.")
                 Start-Sleep $delay
                 $retryCount++
             }
@@ -201,7 +231,7 @@ foreach ($sub in $AllSubscriptions) {
     Write-Output "Checking Storage Accounts for subscription $($sub.name)..."
 
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Storage/storageAccounts?api-version=2023-05-01"
-    $StorageAccounts = ((New-RetryCommand -command "Invoke-Webrequest" -args @{ uri = $uri; headers = $headers; method = "Get" }).Content | ConvertFrom-Json -Depth 10).value
+    $StorageAccounts = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
 
     # Define the checks to be done as well as their related pillars and weight
     $StorageControls = @(
