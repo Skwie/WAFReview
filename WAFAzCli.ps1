@@ -307,7 +307,7 @@ foreach ($sub in $AllSubscriptions) {
             # Turn on soft delete for blob data
             $uri = "https://management.azure.com$($strg.id)/blobServices/default?api-version=2023-05-01"
             try {
-                $BlobProperties = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
+                $BlobProperties = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).properties
             }
             catch {
                 $BlobProperties = $null
@@ -351,7 +351,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             $uri = "https://management.azure.com$($strg.id)/blobServices/default/containers?api-version=2023-05-01"
-            $storageContainerProperties = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value.properties
+            $storageContainerProperties = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value.properties
             if ($storageContainerProperties.Count -gt 0) {
                 foreach ($container in $storageContainerProperties) {
                     if ($container.hasImmutabilityPolicy -eq $True) {
@@ -439,7 +439,7 @@ foreach ($sub in $AllSubscriptions) {
             # Regenerate your account keys periodically.
             $filter = "eventTimestamp ge '$((Get-Date).AddDays(-90).ToString('yyyy-MM-ddTHH:mm:ssZ'))' and eventTimestamp le '$((Get-Date).ToString('yyyy-MM-ddTHH:mm:ssZ'))' and resourceGroupName eq '$resourceGroup'"
             $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Insights/eventtypes/management/values?api-version=2015-04-01&`$filter=$($filter)"
-            $RegenerationLogs = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value.properties
+            $RegenerationLogs = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value.properties
             $Regenerated = $false
             foreach ($RegenLog in $RegenerationLogs) {
                 if ($RegenLog.operationName.value -match 'Microsoft.Storage/storageAccounts/regenerateKey/action') {
@@ -480,7 +480,7 @@ foreach ($sub in $AllSubscriptions) {
             # Use lifecycle policy to move data between access tiers.
             $uri = "https://management.azure.com$($strg.id)/managementPolicies/default?api-version=2023-05-01"
             try {
-                $policy = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
+                $policy = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).properties
             }
             catch {
                 $policy = $null
@@ -612,7 +612,7 @@ foreach ($sub in $AllSubscriptions) {
     Write-Output "Checking Key Vaults for subscription $($sub.name)..."
 
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.KeyVault/vaults?api-version=2022-07-01"
-    $Keyvaults = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+    $Keyvaults = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
         Write-Error "Unable to retrieve key vaults for subscription $($sub.name)." -ErrorAction Continue
     }
@@ -708,7 +708,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Check for Key Vault Full Administrator Permissions
             $uri = "https://management.azure.com$($keyvault.id)?api-version=2022-07-01"
-            $vaultsettings = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
+            $vaultsettings = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10)
             if ('All' -in $vaultsettings.properties.accesspolicies.permissions.certificates -or 'All' -in $vaultsettings.properties.accesspolicies.permissions.keys -or 'All' -in $vaultsettings.properties.accesspolicies.permissions.secrets -or 'All' -in $vaultsettings.properties.accesspolicies.permissions.storage) {
                 $tempVaultResults += "Bad: Full access permissions found on keyvault $($keyvault.name):"
                 foreach ($perm in $vaultsettings.properties.accesspolicies) {
@@ -725,7 +725,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Audit event logging should be active for Azure Key Vault
             $uri = "https://management.azure.com$($keyvault.id)/providers/microsoft.insights/diagnosticSettings?api-version=2021-05-01-preview"
-            $diag = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value.properties
+            $diag = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value.properties
             if (($diag | Where-Object {$_.category -eq 'AuditEvent'}).enabled -eq $True) {
                 $tempVaultResults += "Good: Audit Events are logged for keyvault $($keyvault.name)."
                 $kvControlArray[4].Result = 100
@@ -836,7 +836,7 @@ foreach ($sub in $AllSubscriptions) {
     Write-Output "Checking Virtual Machines for subscription $($sub.name)..."
     
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01"
-    $VirtualMachines = (((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value) | Where-Object {$_.tags -notmatch 'DatabricksEnvironment'}
+    $VirtualMachines = (((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value) | Where-Object {$_.tags -notmatch 'DatabricksEnvironment'}
     if (!$?) {
         Write-Error "Unable to retrieve virtual machines for subscription $($sub.name)." -ErrorAction Continue
     }
@@ -873,7 +873,7 @@ foreach ($sub in $AllSubscriptions) {
 
     # Query JIT policies once, as they are not VM-specific
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Security/jitNetworkAccessPolicies?api-version=2020-01-01"
-    $jitPolicies = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+    $jitPolicies = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
 
     $vmJobs = @()
     $vmControlArrayList = @()
@@ -952,7 +952,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Restrict IP forwarding for Azure Virtual Machines
             $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Network/networkInterfaces?api-version=2021-02-01"
-            $VmNICs = (((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value) | Where-Object {$_.properties.virtualMachine.id -eq $vm.id}
+            $VmNICs = (((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value) | Where-Object {$_.properties.virtualMachine.id -eq $vm.id}
             $enableForwarding = $false
             foreach ($nic in $VmNICs) {
                 if ($nic.enableIpForwarding) {
@@ -1151,11 +1151,11 @@ foreach ($sub in $AllSubscriptions) {
 
             # Enable VM Backup for Azure Virtual Machines
             $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.RecoveryServices/vaults?api-version=2024-04-01"
-            $vaults = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            $vaults = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
             $vmBackedUp = $false
             foreach ($vault in $vaults) {
                 $uri = "https://management.azure.com$($vault.id)/backupProtectedItems?api-version=2024-04-01"
-                $backupItems = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value.id
+                $backupItems = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value.id
                 if ($backupItems -match $vm.name) {
                     $vmBackedUp = $true
                 }
@@ -1217,7 +1217,7 @@ foreach ($sub in $AllSubscriptions) {
     Write-Output "Checking App Services for subscription $($sub.name)..."
 
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Web/sites?api-version=2021-02-01"
-    $AppServices = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+    $AppServices = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
         Write-Error "Unable to retrieve App Services for subscription $($sub.name)." -ErrorAction Continue
     }
@@ -1326,7 +1326,7 @@ foreach ($sub in $AllSubscriptions) {
     
                 # Enable Always On to ensure Web Jobs run reliably
                 $uri = "https://management.azure.com$($appService.id)/config/web?api-version=2021-02-01"
-                $appConfig = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
+                $appConfig = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).properties
                 if ($appConfig.alwaysOn -match 'True') {
                     $tempAppServiceResults += "Good: Always On is enabled for App Service $($appservice.name)"
                     $appServiceControlArray[1].Result = 100
@@ -1390,7 +1390,7 @@ foreach ($sub in $AllSubscriptions) {
                 }
                 else {
                     $uri = "https://management.azure.com$($appService.properties.serverFarmId)?api-version=2021-02-01"
-                    $aseDetails = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
+                    $aseDetails = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10)
                     if ($aseDetails.properties.zoneRedundant -match 'True') {
                         $tempAppServiceResults += "Good: ASE is deployed in a highly available configuration across Availability Zones for App Service $($appservice.name)"
                         $appServiceControlArray[5].Result = 100
@@ -1459,7 +1459,7 @@ foreach ($sub in $AllSubscriptions) {
     
                 # Use Deployment slots for resilient code deployments
                 $uri = "https://management.azure.com$($appService.id)/slots?api-version=2023-12-01"
-                $deploymentSlots = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+                $deploymentSlots = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
                 if ($deploymentSlots) {
                     $tempAppServiceResults += "Good: Deployment slots are used for App Service $($appservice.name)"
                     $appServiceControlArray[9].Result = 100
@@ -1498,7 +1498,7 @@ foreach ($sub in $AllSubscriptions) {
     
                 # Enable Autoscale to ensure adequate resources are available to service requests
                 $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($appservice.properties.resourceGroup)/providers/Microsoft.Insights/autoscalesettings?api-version=2022-10-01"
-                $autoscale = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
+                $autoscale = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10)
                 if ($autoscale.targetResourceUri -match $appservice.id -and $autoscale.enabled -match 'True') {
                     $tempAppServiceResults += "Good: Autoscale is enabled for App Service $($appservice.name)"
                     $appServiceControlArray[12].Result = 100
@@ -1726,7 +1726,7 @@ foreach ($sub in $AllSubscriptions) {
 
                 # Private Endpoint in Use
                 $uri = "https://management.azure.com$($appService.id)/privateEndpointConnections?api-version=2023-12-01"
-                $privateEndpoint = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
+                $privateEndpoint = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10)
                 if ($privateEndpoint) {
                     $tempAppServiceResults += "Good: Private Endpoint is in use for App Service $($appservice.name)"
                     $appServiceControlArray[28].Result = 100
@@ -1795,13 +1795,13 @@ foreach ($sub in $AllSubscriptions) {
     $PostgreSQLServers = @()
 
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.DBforPostgreSQL/servers?api-version=2017-12-01"
-    $PostgreSQLServers += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+    $PostgreSQLServers += ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
         Write-Error "Unable to retrieve PostgreSQL single servers for subscription $($sub.name)." -ErrorAction Continue
     }
 
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.DBforPostgreSQL/flexibleServers?api-version=2022-12-01"
-    $PostgreSQLServers += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+    $PostgreSQLServers += ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
         Write-Error "Unable to retrieve PostgreSQL flexible servers for subscription $($sub.name)." -ErrorAction Continue
     }
@@ -1905,7 +1905,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Monitor your server to ensure it's healthy and performing as expected
             $uri = "https://management.azure.com/subscriptions/$($server.id.split('/')[2])/resourceGroups/$($server.id.split('/')[4])/providers/microsoft.insights/metricAlerts?api-version=2018-03-01"
-            $serverMetrics = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value.properties
+            $serverMetrics = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value.properties
             if ($server.id -in $serverMetrics.scopes) {
                 $tempPostgreSQLResults += "Good: Server is monitored for PostgreSQL server $($server.name)"
                 $postgreSQLControlArray[1].Result = 100
@@ -1929,7 +1929,7 @@ foreach ($sub in $AllSubscriptions) {
             if ($serverStatus -match 'flexible') {
                 # SSL is enforced by default for flexible servers but can be disabled
                 $uri = "https://management.azure.com$($server.id)/configurations/require_secure_transport?api-version=2022-12-01"
-                $sslStatus = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties.value
+                $sslStatus = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).properties.value
                 if ($sslStatus -match 'On') {
                     $tempPostgreSQLResults += "Good: SSL is enforced for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[2].Result = 100
@@ -1942,7 +1942,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Implement network security groups and firewalls to control access to your database
             $uri = "https://management.azure.com$($server.id)/firewallRules?api-version=2017-12-01"
-            $firewallRules = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            $firewallRules = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
             if (!$?) {
                 $tempPostgreSQLResults += "Informational: Private Access is enabled for PostgreSQL server $($server.name), so the firewall rules are not evaluated."
                 $postgreSQLControlArray[3].Result = 0
@@ -2014,7 +2014,7 @@ foreach ($sub in $AllSubscriptions) {
             # Check for PostgreSQL Log Retention Period
             if ($serverStatus -match 'flexible') {
                 $uri = "https://management.azure.com$($server.id)/configurations/logfiles.retention_days?api-version=2017-12-01"
-                $logretention = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties.value
+                $logretention = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).properties.value
                 if ($logretention.value -ge 7) {
                     $tempPostgreSQLResults += "Good: Log retention period is sufficient for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[7].Result = 100
@@ -2054,7 +2054,7 @@ foreach ($sub in $AllSubscriptions) {
             # Disable 'Allow access to Azure services' for PostgreSQL database servers
             if ($serverStatus -match 'single') {
                 $uri = "https://management.azure.com$($server.id)/firewallRules?api-version=2017-12-01"
-                $fwRules = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+                $fwRules = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
                 if ($fwRules.name -notmatch 'AllowAllWindowsAzureIps') {
                     $tempPostgreSQLResults += "Good: 'Allow access to Azure services' is disabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[9].Result = 100
@@ -2066,7 +2066,7 @@ foreach ($sub in $AllSubscriptions) {
             }
             if ($serverStatus -match 'flexible') {
                 $uri = "https://management.azure.com$($server.id)/firewallRules?api-version=2022-12-01"
-                $fwRules = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+                $fwRules = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
                 if ($fwRules.name -notmatch 'AllowAllWindowsAzureIps') {
                     $tempPostgreSQLResults += "Good: 'Allow access to Azure services' is disabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[9].Result = 100
@@ -2080,7 +2080,7 @@ foreach ($sub in $AllSubscriptions) {
             # Enable 'CONNECTION_THROTTLING' Parameter for PostgreSQL Servers
             if ($serverStatus -match 'single') {
                 $uri = "https://management.azure.com$($server.id)/configurations/connection_throttling?api-version=2017-12-01"
-                $connectionThrottling = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
+                $connectionThrottling = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10)
                 if ($connectionThrottling.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'CONNECTION_THROTTLING' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[10].Result = 100
@@ -2092,7 +2092,7 @@ foreach ($sub in $AllSubscriptions) {
             }
             if ($serverStatus -match 'flexible') {
                 $uri = "https://management.azure.com$($server.id)/configurations/connection_throttle.enable?api-version=2022-12-01"
-                $connectionThrottling = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
+                $connectionThrottling = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10)
                 if ($connectionThrottling.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'CONNECTION_THROTTLING' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[10].Result = 100
@@ -2106,7 +2106,7 @@ foreach ($sub in $AllSubscriptions) {
             # Enable 'LOG_CHECKPOINTS' Parameter for PostgreSQL Servers
             if ($serverStatus -match 'single') {
                 $uri = "https://management.azure.com$($server.id)/configurations/log_checkpoints?api-version=2017-12-01"
-                $logCheckpoints = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
+                $logCheckpoints = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10)
                 if ($logCheckpoints.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'LOG_CHECKPOINTS' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[11].Result = 100
@@ -2118,7 +2118,7 @@ foreach ($sub in $AllSubscriptions) {
             }
             if ($serverStatus -match 'flexible') {
                 $uri = "https://management.azure.com$($server.id)/configurations/log_checkpoints?api-version=2022-12-01"
-                $logCheckpoints = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
+                $logCheckpoints = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10)
                 if ($logCheckpoints.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'LOG_CHECKPOINTS' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[11].Result = 100
@@ -2132,7 +2132,7 @@ foreach ($sub in $AllSubscriptions) {
             # Enable 'LOG_CONNECTIONS' Parameter for PostgreSQL Servers
             if ($serverStatus -match 'single') {
                 $uri = "https://management.azure.com$($server.id)/configurations/log_connections?api-version=2017-12-01"
-                $logConnections = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
+                $logConnections = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10)
                 if ($logConnections.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'LOG_CONNECTIONS' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[12].Result = 100
@@ -2144,7 +2144,7 @@ foreach ($sub in $AllSubscriptions) {
             }
             if ($serverStatus -match 'flexible') {
                 $uri = "https://management.azure.com$($server.id)/configurations/log_connections?api-version=2022-12-01"
-                $logConnections = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
+                $logConnections = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10)
                 if ($logConnections.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'LOG_CONNECTIONS' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[12].Result = 100
@@ -2158,7 +2158,7 @@ foreach ($sub in $AllSubscriptions) {
             # Enable 'LOG_DISCONNECTIONS' Parameter for PostgreSQL Servers
             if ($serverStatus -match 'single') {
                 $uri = "https://management.azure.com$($server.id)/configurations/log_disconnections?api-version=2017-12-01"
-                $logDisconnections = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
+                $logDisconnections = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10)
                 if ($logDisconnections.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'LOG_DISCONNECTIONS' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[13].Result = 100
@@ -2170,7 +2170,7 @@ foreach ($sub in $AllSubscriptions) {
             }
             if ($serverStatus -match 'flexible') {
                 $uri = "https://management.azure.com$($server.id)/configurations/log_disconnections?api-version=2022-12-01"
-                $logDisconnections = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
+                $logDisconnections = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10)
                 if ($logDisconnections.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'LOG_DISCONNECTIONS' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[13].Result = 100
@@ -2184,7 +2184,7 @@ foreach ($sub in $AllSubscriptions) {
             # Enable 'LOG_DURATION' Parameter for PostgreSQL Servers
             if ($serverStatus -match 'single') {
                 $uri = "https://management.azure.com$($server.id)/configurations/log_duration?api-version=2017-12-01"
-                $logDuration = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
+                $logDuration = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10)
                 if ($logDuration.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'LOG_DURATION' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[14].Result = 100
@@ -2196,7 +2196,7 @@ foreach ($sub in $AllSubscriptions) {
             }
             if ($serverStatus -match 'flexible') {
                 $uri = "https://management.azure.com$($server.id)/configurations/log_duration?api-version=2022-12-01"
-                $logDuration = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
+                $logDuration = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10)
                 if ($logDuration.value -match 'on') {
                     $tempPostgreSQLResults += "Good: 'LOG_DURATION' parameter is enabled for PostgreSQL server $($server.name)"
                     $postgreSQLControlArray[14].Result = 100
@@ -2279,7 +2279,7 @@ foreach ($sub in $AllSubscriptions) {
     $CosmosDBAccounts = @()
 
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.DocumentDB/databaseAccounts?api-version=2021-04-15"
-    $CosmosDBAccounts += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+    $CosmosDBAccounts += ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
         Write-Error "Unable to retrieve CosmosDB accounts for subscription $($sub.name)." -ErrorAction Continue
     }
@@ -2383,7 +2383,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Use role-based access control to limit control-plane access to specific identities and groups and within the scope of well-defined assignments
             $uri = "https://management.azure.com$($cosmosAcct.id)/providers/Microsoft.Authorization/roleAssignments?api-version=2022-04-01"
-            $roleAssignments = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            $roleAssignments = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
             if ($?) {
                 if ($roleAssignments) {
                     $tempCosmosDBResults += "Good: Role-based access control is used for CosmosDB account $($cosmosAcct.name)"
@@ -2402,7 +2402,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Enable Microsoft Defender for Azure Cosmos DB
             $uri = "https://management.azure.com$($cosmosAcct.id)/providers/Microsoft.Security/advancedThreatProtectionSettings/current?api-version=2019-01-01"
-            $defenderStatus = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
+            $defenderStatus = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).properties
             if ($defenderStatus.isEnabled) {
                 $tempCosmosDBResults += "Good: Microsoft Defender is enabled for CosmosDB account $($cosmosAcct.name)"
                 $cosmosDBControlArray[5].Result = 100
@@ -2416,9 +2416,9 @@ foreach ($sub in $AllSubscriptions) {
             # Check the type of db; Gremlin, Cassandra and SQL support TTL
             if ($cosmosAcct.properties.capabilities.name -match 'EnableGremlin' ) {
                 $uri = "https://management.azure.com$($cosmosAcct.id)/gremlinDatabases?api-version=2022-12-01"
-                $gremlinDB = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+                $gremlinDB = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
                 $uri = "https://management.azure.com$($gremlinDB[0].id)?api-version=2022-12-01"
-                $ttl = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
+                $ttl = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).properties
                 if ($ttl.defaultTtl -ge 1) {
                     $tempCosmosDBResults += "Good: Time-to-live (TTL) is implemented for CosmosDB account $($cosmosAcct.name)"
                     $cosmosDBControlArray[6].Result = 100
@@ -2430,12 +2430,12 @@ foreach ($sub in $AllSubscriptions) {
             }
             elseif ($cosmosAcct.properties.capabilities.name -match 'EnableCassandra') {
                 $uri = "https://management.azure.com$($cosmosAcct.id)/cassandraKeyspaces?api-version=2022-12-01"
-                $cassandraDB = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+                $cassandraDB = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
                 $uri = "https://management.azure.com$($cassandraDB[0].id)/cassandraTables?api-version=2022-12-01"
-                $cassandraTable = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+                $cassandraTable = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
                 if ($cassandraTable.length -ge 1) {
                     $uri = "https://management.azure.com$($cassandraTable[0].id)?api-version=2022-12-01"
-                    $ttl = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
+                    $ttl = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).properties
                     if ($ttl.defaultTtl -ge 1) {
                         $tempCosmosDBResults += "Good: Time-to-live (TTL) is implemented for CosmosDB account $($cosmosAcct.name)"
                         $cosmosDBControlArray[6].Result = 100
@@ -2463,9 +2463,9 @@ foreach ($sub in $AllSubscriptions) {
             }
             else {
                 $uri = "https://management.azure.com$($cosmosAcct.id)/sqlDatabases?api-version=2024-08-15"
-                $sqlDB = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+                $sqlDB = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
                 $uri = "https://management.azure.com$($sqlDB[0].id)/containers?api-version=2024-08-15"
-                $sqlContainer = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+                $sqlContainer = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
                 if ($sqlContainer.length -ge 1) {
                     if ($sqlContainer.properties.resource.defaultTtl -ge 1) {
                         $tempCosmosDBResults += "Good: Time-to-live (TTL) is implemented for CosmosDB account $($cosmosAcct.name)"
@@ -2485,7 +2485,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Create alerts associated with host machine resources (Currently binary yes/no check, needs to be updated to check for specific alerts)
             $uri = "https://management.azure.com/subscriptions/$($cosmosAcct.id.split("/")[2])/resourceGroups/$($cosmosAcct.id.split("/")[4])/providers/Microsoft.Insights/metricAlerts?api-version=2018-03-01"
-            $hostAlerts = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            $hostAlerts = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
             if ($hostAlerts) {
                 $tempCosmosDBResults += "Good: Alerts are created for host machine resources for CosmosDB account $($cosmosAcct.name)"
                 $cosmosDBControlArray[7].Result = 100
@@ -2497,7 +2497,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Create alerts for throughput throttling (Currently binary yes/no check, needs to be updated to check for specific alerts)
             $uri = "https://management.azure.com/subscriptions/$($cosmosAcct.id.split("/")[2])/resourceGroups/$($cosmosAcct.id.split("/")[4])/providers/Microsoft.Insights/metricAlerts?api-version=2018-03-01"
-            $throttleAlerts = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            $throttleAlerts = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
             if ($throttleAlerts) {
                 $tempCosmosDBResults += "Good: Alerts are created for throughput throttling for CosmosDB account $($cosmosAcct.name)"
                 $cosmosDBControlArray[8].Result = 100
@@ -2567,7 +2567,7 @@ foreach ($sub in $AllSubscriptions) {
     $AKSClusters = @()
 
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.ContainerService/managedClusters?api-version=2021-08-01"
-    $AKSClusters += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+    $AKSClusters += ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
         Write-Error "Unable to retrieve AKS clusters for subscription $($sub.name)." -
         ErrorAction Continue
@@ -2620,7 +2620,7 @@ foreach ($sub in $AllSubscriptions) {
             $aksControlArray = @()
 
             $uri = "https://management.azure.com$($aksCluster.id)?api-version=2021-08-01"
-            $clusterDetails = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).properties
+            $clusterDetails = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).properties
 
             foreach ($control in $using:AKSControls) {
                 $aksCheck = $control.Split(';')
@@ -2767,7 +2767,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Ensure that AKS clusters are using the latest available version of Kubernetes software
             $uri = "https://management.azure.com$($aksCluster.id)/upgradeProfiles/default?api-version=2024-08-01"
-            $aksVersionStatus = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
+            $aksVersionStatus = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10)
             $latestVersion = $true
             foreach ($upgrade in $aksVersionStatus.controlPlaneProfile.upgrades) {
                 if ($upgrade.kubernetesVersion -gt $aksVersionStatus.controlPlaneProfile.kubernetesVersion) {
@@ -2796,7 +2796,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Ensure that AKS clusters are configured to use the Network Contributor role
             $uri = "https://management.azure.com$($aksCluster.id)/providers/Microsoft.Authorization/roleAssignments?api-version=2022-04-01"
-            $networkRole = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            $networkRole = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
             if ($networkRole) {
                 $tempAKSResults += "Good: AKS cluster is configured to use the Network Contributor role for AKS cluster $($aksCluster.name)"
                 $aksControlArray[15].Result = 100
@@ -2866,7 +2866,7 @@ foreach ($sub in $AllSubscriptions) {
     $OpenAIResources = @()
 
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.CognitiveServices/accounts?api-version=2021-04-30"
-    $OpenAIResources += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value | Where-Object { $_.kind -match "OpenAI" }
+    $OpenAIResources += ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value | Where-Object { $_.kind -match "OpenAI" }
     if (!$?) {
         Write-Error "Unable to retrieve Azure OpenAI resources for subscription $($sub.name)." -
         ErrorAction Continue
@@ -2904,7 +2904,7 @@ foreach ($sub in $AllSubscriptions) {
             $tempOpenAIResults = @()
 
             $uri = "https://management.azure.com$($openAIResource.id)?api-version=2021-04-30"
-            $openAIDetails = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
+            $openAIDetails = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10)
 
             $openAIControlArray = @()
 
@@ -2954,7 +2954,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Enable and configure Diagnostics for the Azure OpenAI Service
             $uri = "https://management.azure.com$($openAIResource.id)/providers/microsoft.insights/diagnosticSettings?api-version=2021-05-01-preview"
-            $openAIDiagnostics = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            $openAIDiagnostics = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
             if ($openAIDiagnostics.type -match "Microsoft.Insights/diagnosticSettings") {
                 $tempOpenAIResults += "Good: Diagnostics are enabled and configured for the Azure OpenAI Service for OpenAI resource $($openAIResource.name)"
                 $openAIControlArray[2].Result = 100
@@ -2972,7 +2972,7 @@ foreach ($sub in $AllSubscriptions) {
                 }
                 else {
                     $uri = "https://management.azure.com/providers/Microsoft.Authorization/roleAssignments?api-version=2021-04-01&$filter={principalId eq '$($identity.principalId)'}"
-                    $roles = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+                    $roles = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
                     if ($roles.roleDefinitionName -eq "Owner" -or $roles.roleDefinitionName -eq "Contributor" -or $roles.roleDefinitionName -eq "User Access Administrator" -or $roles.roleDefinitionName -eq "Role Based Access Control Administrator") {
                         $openAIControlArray[3].Result = 0
                     }
@@ -3032,14 +3032,14 @@ foreach ($sub in $AllSubscriptions) {
     $SQLServers = @()
 
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Sql/servers?api-version=2021-05-01-preview"
-    $SQLServers += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+    $SQLServers += ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
         Write-Error "Unable to retrieve SQL Servers for subscription $($sub.name)." -ErrorAction Continue
     }
 
     foreach ($sqlServer in $SQLServers) {
         $uri = "https://management.azure.com$($sqlServer.id)/databases?api-version=2021-05-01-preview"
-        $SQLDatabases += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+        $SQLDatabases += ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
         if (!$?) {
             Write-Error "Unable to retrieve SQL Databases for SQL Server $($sqlServer.name)." -ErrorAction Continue
         }
@@ -3101,7 +3101,7 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             $uri = "https://management.azure.com$($sqlDb.id.Split("/databases/")[0])?api-version=2021-05-01-preview"
-            $srv = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
+            $srv = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10)
 
             $tempSQLDbResults += ""
             $tempSQLDbResults += "----- SQL Database - $($srv.name) / $($sqlDb.name) -----"
@@ -3139,7 +3139,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Monitor your SQL database in near-real time with Azure Monitor
             $uri = "https://management.azure.com$($sqlDb.id)/providers/microsoft.insights/diagnosticSettings?api-version=2021-05-01-preview"
-            $sqlDbMonitoring = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            $sqlDbMonitoring = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
             if ($sqlDbMonitoring.type -match "Microsoft.Insights/diagnosticSettings") {
                 $tempSQLDbResults += "Good: SQL database is monitored in near-real time with Azure Monitor for SQL Database $($sqlDb.name)"
                 $sqlDbControlArray[3].Result = 100
@@ -3171,7 +3171,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Use a private endpoint to connect to your SQL Database
             $uri = "https://management.azure.com$($srv.id)/privateEndpointConnections?api-version=2021-11-01"
-            $privateEndpoint = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            $privateEndpoint = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
             if ($privateEndpoint) {
                 $tempSQLDbResults += "Good: Private endpoint is used to connect to SQL Database $($sqlDb.name)"
                 $sqlDbControlArray[6].Result = 100
@@ -3193,7 +3193,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Use Advanced Threat Protection for your SQL Database
             $uri = "https://management.azure.com$($sqlDb.id)/securityAlertPolicies/default?api-version=2021-05-01-preview"
-            $atp = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
+            $atp = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10)
             if ($atp.state -match "Enabled") {
                 $tempSQLDbResults += "Good: Advanced Threat Protection is used for SQL Database $($sqlDb.name)"
                 $sqlDbControlArray[8].Result = 100
@@ -3205,7 +3205,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Track database events with Azure SQL Database Auditing
             $uri = "https://management.azure.com$($sqlDb.id)/securityAlertPolicies/default?api-version=2021-05-01-preview"
-            $auditing = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
+            $auditing = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10)
             if ($auditing.state -match "Enabled") {
                 $tempSQLDbResults += "Good: Database events are tracked with Azure SQL Database Auditing for SQL Database $($sqlDb.name)"
                 $sqlDbControlArray[9].Result = 100
@@ -3287,7 +3287,7 @@ foreach ($sub in $AllSubscriptions) {
     $SQLManagedInstances = @()
 
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Sql/managedInstances?api-version=2021-05-01-preview"
-    $SQLManagedInstances += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+    $SQLManagedInstances += ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
         Write-Error "Unable to retrieve SQL Managed Instances for subscription $($sub.name)." -
         ErrorAction Continue
@@ -3369,7 +3369,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Monitor your SQL managed instance in near-real time with Azure Monitor
             $uri = "https://management.azure.com$($sqlMi.id)/providers/microsoft.insights/diagnosticSettings?api-version=2021-05-01-preview"
-            $sqlMiMonitoring = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            $sqlMiMonitoring = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
             if ($sqlMiMonitoring.type -match "Microsoft.Insights/diagnosticSettings") {
                 $tempSQLMiResults += "Good: SQL managed instance is monitored in near-real time with Azure Monitor for SQL Managed Instance $($sqlMi.name)"
                 $sqlMiControlArray[2].Result = 100
@@ -3401,7 +3401,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Use Advanced Threat Protection for your SQL Managed Instance
             $uri = "https://management.azure.com$($sqlMi.id)/securityAlertPolicies/default?api-version=2021-05-01-preview"
-            $atp = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10)
+            $atp = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10)
             if ($atp.state -match "Enabled") {
                 $tempSQLMiResults += "Good: Advanced Threat Protection is used for SQL Managed Instance $($sqlMi.name)"
                 $sqlMiControlArray[5].Result = 100
@@ -3470,7 +3470,7 @@ foreach ($sub in $AllSubscriptions) {
     $DatabricksWorkspaces = @()
 
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Databricks/workspaces?api-version=2024-05-01"
-    $DatabricksWorkspaces += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+    $DatabricksWorkspaces += ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
         Write-Error "Unable to retrieve Databricks Workspaces for subscription $($sub.name)." -ErrorAction Continue
     }
@@ -3549,7 +3549,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Restrict and monitor your virtual machines
             $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$($databricks.id.Split("/")[4])/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01"
-            $vms = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            $vms = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
             if ($vms) {
                 $tempDatabricksResults += "Good: Virtual machines are restricted and monitored for Databricks Workspace $($databricks.name)"
                 $databricksControlArray[2].Result = 100
@@ -3563,7 +3563,7 @@ foreach ($sub in $AllSubscriptions) {
             # Use the VNet injection functionality to enable more secure scenarios
             $uri = "https://management.azure.com$($databricks.id)/virtualNetworkPeerings?api-version=2024-05-01"
             try {
-                $vnet = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+                $vnet = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
 
                 if ($vnet) {
                     $tempDatabricksResults += "Good: VNet injection functionality is used to enable more secure scenarios for Databricks Workspace $($databricks.name)"
@@ -3584,7 +3584,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Use diagnostic logs to audit workspace access and permissions
             $uri = "https://management.azure.com$($databricks.id)/providers/microsoft.insights/diagnosticSettings?api-version=2021-05-01-preview"
-            $logs = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            $logs = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
             if ($logs.type -match "Microsoft.Insights/diagnosticSettings") {
                 $tempDatabricksResults += "Good: Diagnostic logs are used to audit workspace access and permissions for Databricks Workspace $($databricks.name)"
                 $databricksControlArray[4].Result = 100
@@ -3643,7 +3643,7 @@ foreach ($sub in $AllSubscriptions) {
     $AppGateways = @()
 
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Network/applicationGateways?api-version=2021-05-01"
-    $AppGateways += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 15).value
+    $AppGateways += ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 15).value
     if (!$?) {
         Write-Error "Unable to retrieve Application Gateways for subscription $($sub.name)." -ErrorAction Continue
     }
@@ -3815,7 +3815,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Monitor key cost driver Application Gateway metrics
             $uri = "https://management.azure.com$($appGateway.id)/providers/microsoft.insights/metrics?api-version=2023-10-01"
-            $metrics = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            $metrics = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
             if ($metrics) {
                 $tempAppGatewayResults += "Good: Key cost driver Application Gateway metrics are monitored for Application Gateway $($appGateway.name)"
                 $appGatewayControlArray[10].Result = 100
@@ -3828,7 +3828,7 @@ foreach ($sub in $AllSubscriptions) {
             # Configure alerts to notify you if capacity metrics exceed thresholds
             $gwResourceGroup = $appGateway.id.Split("/")[4]
             $uri = "https://management.azure.com/subscriptions/$($sub.id)/resourceGroups/$gwResourceGroup/providers/microsoft.insights/metricAlerts?api-version=2018-03-01"
-            $alerts = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            $alerts = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
             if ($alerts.properties.criteria.allOf.metricName -match "CPU|Memory|Storage") {
                 $tempAppGatewayResults += "Good: Alerts are configured to notify you if capacity metrics exceed thresholds for Application Gateway $($appGateway.name)"
                 $appGatewayControlArray[11].Result = 100
@@ -3850,7 +3850,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Enable diagnostics logging for Application Gateway
             $uri = "https://management.azure.com$($appGateway.id)/providers/microsoft.insights/diagnosticSettings?api-version=2021-05-01-preview"
-            $logs = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            $logs = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
             if ($logs.type -match "Microsoft.Insights/diagnosticSettings") {
                 $tempAppGatewayResults += "Good: Diagnostics logging is enabled for Application Gateway $($appGateway.name)"
                 $appGatewayControlArray[13].Result = 100
@@ -3862,7 +3862,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Use Advisor to monitor Key Vault configuration problems
             $uri = "https://management.azure.com$($appGateway.id)/providers/microsoft.security/assessments?api-version=2021-06-01"
-            $advisor = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            $advisor = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
             if ($advisor) {
                 $tempAppGatewayResults += "Good: Advisor is used to monitor Key Vault configuration problems for Application Gateway $($appGateway.name)"
                 $appGatewayControlArray[14].Result = 100
@@ -3931,7 +3931,7 @@ foreach ($sub in $AllSubscriptions) {
     $LoadBalancers = @()
 
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Network/loadBalancers?api-version=2021-05-01"
-    $LoadBalancers += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 15).value
+    $LoadBalancers += ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 15).value
     if (!$?) {
         Write-Error "Unable to retrieve Load Balancers for subscription $($sub.name)." -ErrorAction Continue
     }
@@ -4019,7 +4019,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Use NAT Gateway instead of outbound rules for production workloads
             $uri = "https://management.azure.com$($loadBalancer.id)/outboundRules?api-version=2021-05-01"
-            $outboundRules = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            $outboundRules = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
             if (!$outboundRules) {
                 $tempLoadBalancerResults += "Good: NAT Gateway is used instead of outbound rules for production workloads for Load Balancer $($loadBalancer.name)"
                 $loadBalancerControlArray[3].Result = 100
@@ -4078,7 +4078,7 @@ foreach ($sub in $AllSubscriptions) {
     $ServiceBuses = @()
 
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.ServiceBus/namespaces?api-version=2024-01-01"
-    $ServiceBuses += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 15).value
+    $ServiceBuses += ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 15).value
     if (!$?) {
         Write-Error "Unable to retrieve Service Bus instances for subscription $($sub.name)." -ErrorAction Continue
     }
@@ -4160,7 +4160,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Configure Geo-Disaster
             $uri = "https://management.azure.com$($serviceBus.id)/disasterRecoveryConfigs?api-version=2024-01-01"
-            $geoDisaster = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            $geoDisaster = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
             if ($geoDisaster) {
                 $tempServiceBusResults += "Good: Geo-Disaster is configured for Service Bus $($serviceBus.name)"
                 $serviceBusControlArray[2].Result = 100
@@ -4192,7 +4192,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Ensure related messages are delivered in guaranteed order
             $uri = "https://management.azure.com$($serviceBus.id)/queues?api-version=2024-01-01"
-            $queues = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            $queues = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
             if ($queues.properties.requiresDuplicateDetection -match "True") {
                 $tempServiceBusResults += "Good: Related messages are delivered in guaranteed order for Service Bus $($serviceBus.name)"
                 $serviceBusControlArray[5].Result = 100
@@ -4214,7 +4214,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Implement auto-scaling of messaging units, to ensure that you have enough resources available for your workloads
             $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Insights/autoScaleSettings?api-version=2021-05-01-preview"
-            $autoScale = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value | Where-Object { $_.properties.targetResourceUri -match $serviceBus.id }
+            $autoScale = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value | Where-Object { $_.properties.targetResourceUri -match $serviceBus.id }
             if ($autoScale.properties.enabled -match "True") {
                 $tempServiceBusResults += "Good: Auto-scaling of messaging units is implemented for Service Bus $($serviceBus.name)"
                 $serviceBusControlArray[7].Result = 100
@@ -4273,7 +4273,7 @@ foreach ($sub in $AllSubscriptions) {
     $LogAnalyticsWorkspaces = @()
 
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.OperationalInsights/workspaces?api-version=2023-09-01"
-    $LogAnalyticsWorkspaces += ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 15).value
+    $LogAnalyticsWorkspaces += ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 15).value
     if (!$?) {
         Write-Error "Unable to retrieve Log Analytics workspaces for subscription $($sub.name)." -ErrorAction Continue
     }
@@ -4365,7 +4365,7 @@ foreach ($sub in $AllSubscriptions) {
 
             # Configure Log query auditing to track which users are running queries
             $uri = "https://management.azure.com$($logAnalytics.id)/providers/microsoft.security/assessments?api-version=2021-06-01"
-            $advisor = ((Invoke-WebRequest -Uri $uri -Headers $headers -Method Get).Content | ConvertFrom-Json -Depth 10).value
+            $advisor = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
             if ($advisor) {
                 $tempLogAnalyticsResults += "Good: Log query auditing is configured to track which users are running queries for Log Analytics $($logAnalytics.name)"
                 $logAnalyticsControlArray[3].Result = 100
