@@ -104,7 +104,7 @@ function New-RetryCommand
     $done = $false
     $scriptBlock = [ScriptBlock]::Create($command)
 
-    while (-not $done -and $retryCount -lt $maxRetries) {
+    while (-not $done -and $retryCount -le $maxRetries) {
         try {
             & $scriptBlock @args
             $done = $true
@@ -112,6 +112,7 @@ function New-RetryCommand
         catch {
             if ($retryCount -ge $maxRetries) {
                 Write-Error ("Command $($command) failed the maximum number of $($maxRetries) times.") -ErrorAction Continue
+                Break
             } else {
                 Write-Verbose ("Command $($command) did not complete successfully. Retrying in $($delay) seconds.")
                 Start-Sleep $delay
@@ -134,7 +135,7 @@ function New-ApiRetryCommand
     $retryCount = 0
     $done = $false
 
-    while (-not $done -and $retryCount -lt $maxRetries) {
+    while (-not $done -and $retryCount -le $maxRetries) {
         try {
             Invoke-WebRequest -Uri $uri -Headers $headers -Method Get
             $done = $true
@@ -142,6 +143,7 @@ function New-ApiRetryCommand
         catch {
             if ($retryCount -ge $maxRetries) {
                 Write-Error ("API call failed the maximum number of $($maxRetries) times.") -ErrorAction Continue
+                Break
             } else {
                 Write-Verbose ("API call did not complete successfully. Retrying in $($delay) seconds.")
                 Start-Sleep $delay
