@@ -47,10 +47,10 @@ param
 
 ############## Region Import Functions ##############
 
-.\Get-WeightedAverage.ps1
-.\Get-AllWeightedAveragesPerService.ps1
-.\New-RetryCommand.ps1
-.\New-ApiRetryCommand.ps1
+. $PSScriptRoot\Get-WeightedAverage.ps1
+. $PSScriptRoot\Get-AllWeightedAveragesPerService.ps1
+. $PSScriptRoot\New-RetryCommand.ps1
+. $PSScriptRoot\New-ApiRetryCommand.ps1
 
 # End region
 
