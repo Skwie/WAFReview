@@ -51,6 +51,10 @@ param
 . $PSScriptRoot\Get-AllWeightedAveragesPerService.ps1
 . $PSScriptRoot\New-RetryCommand.ps1
 . $PSScriptRoot\New-ApiRetryCommand.ps1
+# Create a definition for ApiRetryCommand so we can use it in threadjobs
+$def = @(
+    ${function:New-ApiRetryCommand}.ToString()
+)
 
 # End region
 
@@ -179,7 +183,8 @@ foreach ($sub in $AllSubscriptions) {
 
         $storageJobs += Start-Threadjob -ScriptBlock {
 
-            . $PSScriptRoot\New-ApiRetryCommand.ps1
+            $ApiRetryFunction = $using:def
+            ${function:New-ApiRetryCommand} = $ApiRetryFunction
 
             $strg = $using:strg
             $headers = $using:headers
