@@ -45,113 +45,12 @@ param
     $GeneratePowerPoint = $false
 )
 
-################# Region Functions #################
+############## Region Import Functions ##############
 
-function Get-WeightedAverage($array) {
-    $score = $array | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
-    $weight = $array | ForEach-Object { $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
-    $weightedAverage = [math]::Round(($score / $weight),1)
-    return $weightedAverage
-}
-
-function Get-AllWeightedAveragesPerService($controlArray) {
-    $allSrvcWeightedAverages = @()
-    $reliabilityScores = @()
-    $securityScores = @()
-    $operationalExcellenceScores = @()
-    $costOptimizationScores = @()
-    $performanceEfficiencyScores = @()
-    $customScores = @()
-
-    foreach ($contr in $controlArray) {
-        if ($contr.Pillars -contains 'Reliability') {$reliabilityScores += $contr}
-        if ($contr.Pillars -contains 'Security') {$securityScores += $contr}
-        if ($contr.Pillars -contains 'Operational Excellence') {$operationalExcellenceScores += $contr}
-        if ($contr.Pillars -contains 'Cost Optimization') {$costOptimizationScores += $contr}
-        if ($contr.Pillars -contains 'Performance Efficiency') {$performanceEfficiencyScores += $contr}
-        if ($contr.Pillars -contains 'Custom') {$customScores += $contr}
-    }
-
-    $reliabilityWeightedAverage = Get-WeightedAverage($reliabilityScores)
-    $securityWeightedAverage = Get-WeightedAverage($securityScores)
-    $operationalExcellenceWeightedAverage = Get-WeightedAverage($operationalExcellenceScores)
-    $costOptimizationWeightedAverage = Get-WeightedAverage($costOptimizationScores)
-    $performanceEfficiencyWeightedAverage = Get-WeightedAverage($performanceEfficiencyScores)
-    $customWeightedAverage = Get-WeightedAverage($customScores)
-
-    if ($reliabilityWeightedAverage -notmatch 'NaN') {$allSrvcWeightedAverages += "Reliability Pillar;$reliabilityWeightedAverage"}
-    if ($securityWeightedAverage -notmatch 'NaN') {$allSrvcWeightedAverages += "Security Pillar;$securityWeightedAverage"}
-    if ($operationalExcellenceWeightedAverage -notmatch 'NaN') {$allSrvcWeightedAverages += "Operational Excellence Pillar;$operationalExcellenceWeightedAverage"}
-    if ($costOptimizationWeightedAverage -notmatch 'NaN') {$allSrvcWeightedAverages += "Cost Optimization Pillar;$costOptimizationWeightedAverage"}
-    if ($performanceEfficiencyWeightedAverage -notmatch 'NaN') {$allSrvcWeightedAverages += "Performance Efficiency Pillar;$performanceEfficiencyWeightedAverage"}
-    if ($customWeightedAverage -notmatch 'NaN') {$allSrvcWeightedAverages += "Custom Checks;$customWeightedAverage"}
-
-    return $allSrvcWeightedAverages
-}
-
-function New-RetryCommand
-{
-    param (
-        [Parameter(Mandatory=$true)][string]$command, 
-        [Parameter(Mandatory=$true)][hashtable]$args
-    )
-    
-    $args.ErrorAction = "Stop"
-    $maxRetries = 5
-    $delay = 2
-
-    $retryCount = 0
-    $done = $false
-    $scriptBlock = [ScriptBlock]::Create($command)
-
-    while (-not $done -and $retryCount -le $maxRetries) {
-        try {
-            & $scriptBlock @args
-            $done = $true
-        } 
-        catch {
-            if ($retryCount -ge $maxRetries) {
-                Write-Error ("Command $($command) failed the maximum number of $($maxRetries) times.") -ErrorAction Continue
-                Break
-            } else {
-                Write-Verbose ("Command $($command) did not complete successfully. Retrying in $($delay) seconds.")
-                Start-Sleep $delay
-                $retryCount++
-            }
-        }
-    }
-}
-
-function New-ApiRetryCommand
-{
-    param (
-        [Parameter(Mandatory=$true)][string]$uri, 
-        [Parameter(Mandatory=$true)][hashtable]$headers
-    )
-    
-    $maxRetries = 5
-    $delay = 2
-
-    $retryCount = 0
-    $done = $false
-
-    while (-not $done -and $retryCount -le $maxRetries) {
-        try {
-            Invoke-WebRequest -Uri $uri -Headers $headers -Method Get
-            $done = $true
-        } 
-        catch {
-            if ($retryCount -ge $maxRetries) {
-                Write-Error ("API call failed the maximum number of $($maxRetries) times.") -ErrorAction Continue
-                Break
-            } else {
-                Write-Verbose ("API call did not complete successfully. Retrying in $($delay) seconds.")
-                Start-Sleep $delay
-                $retryCount++
-            }
-        }
-    }
-}
+.\Get-WeightedAverage.ps1
+.\Get-AllWeightedAveragesPerService.ps1
+.\New-RetryCommand.ps1
+.\New-ApiRetryCommand.ps1
 
 # End region
 
