@@ -179,6 +179,8 @@ foreach ($sub in $AllSubscriptions) {
 
         $storageJobs += Start-Threadjob -ScriptBlock {
 
+            . $PSScriptRoot\New-ApiRetryCommand.ps1
+
             $strg = $using:strg
             $headers = $using:headers
             $sub = $using:sub
