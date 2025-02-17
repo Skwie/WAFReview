@@ -31,47 +31,8 @@ $summaryAreaIconY = @(180.4359, 221.6319, 262.3682, 303.1754, 343.8692, 386.6667
 
 #-----------------------------------------------------------[Functions]------------------------------------------------------------
 
-
-function Edit-Slide($Slide, $StringToFindAndReplace, $Gauge, $Counter)
-{
-    $StringToFindAndReplace.GetEnumerator() | ForEach-Object { 
-
-        if($_.Key -like "*Threshold*")
-        {
-            $Slide.Shapes[$_.Key].Left = [single]$_.Value
-        }
-        else
-        {
-            #$Slide.Shapes[$_.Key].TextFrame.TextRange.Text = $_.Value
-            $Slide.Shapes[$_.Key].TextFrame.TextRange.Text = $_.Value -join ' '
-        }
-
-        if($Gauge)
-        {
-            $Slide.Shapes[$Gauge].Duplicate() | Out-Null
-            $Slide.Shapes[$Slide.Shapes.Count].Left = [single]$summaryAreaIconX
-            $Slide.Shapes[$Slide.Shapes.Count].Top = $summaryAreaIconY[$Counter]
-        }
-    }
-}
-
-function Clear-Presentation($Slide)
-{
-    $slideToRemove = $Slide.Shapes | Where-Object {$_.TextFrame.TextRange.Text -match '^\[Pillar\]$'}
-    $shapesToRemove = $Slide.Shapes | Where-Object {$_.TextFrame.TextRange.Text -match '^\[(W|Resource_Type_|Recommendation_)?[0-9]\]$'}
-
-    if($slideToRemove)
-    {
-        $Slide.Delete()
-    }
-    elseif ($shapesToRemove)
-    {
-        foreach($shapeToRemove in $shapesToRemove)
-        {
-            $shapeToRemove.Delete()
-        }
-    }
-}
+. $PSScriptRoot\Edit-Slide.ps1
+. $PSScriptRoot\Clear-Presentation.ps1
 
 #-----------------------------------------------------------[Execution]------------------------------------------------------------
 
