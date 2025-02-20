@@ -18,7 +18,7 @@ function New-ApiRetryCommand
         } 
         catch {
             if ($Error[0].Exception.Message -like "*not found*" -or $Error[0].Exception.Message -like "*notfound*") {
-                Write-Error ("API call failed because the resource was not found.") -ErrorAction Continue
+                Write-Verbose ("API call failed because the resource was not found.")
                 Break
             }
             if ($retryCount -ge $maxRetries) {
