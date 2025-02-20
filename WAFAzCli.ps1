@@ -388,7 +388,7 @@ foreach ($sub in $AllSubscriptions) {
             # Use lifecycle policy to move data between access tiers.
             $uri = "https://management.azure.com$($strg.id)/managementPolicies/default?api-version=2023-05-01"
             try {
-                $policy = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).properties
+                $policy = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10 -ErrorAction SilentlyContinue).properties
             }
             catch {
                 $policy = $null
@@ -792,6 +792,9 @@ foreach ($sub in $AllSubscriptions) {
 
         $vmJobs += Start-Threadjob -ScriptBlock {
 
+            $ApiRetryFunction = $using:def
+            ${function:New-ApiRetryCommand} = $ApiRetryFunction
+
             $vm = $using:vm
             $headers = $using:headers
             $sub = $using:sub
@@ -1181,6 +1184,9 @@ foreach ($sub in $AllSubscriptions) {
         Write-Output "Checking App Service $($appservice.name)..."
 
         $appServiceJobs += Start-Threadjob -ScriptBlock {
+
+            $ApiRetryFunction = $using:def
+            ${function:New-ApiRetryCommand} = $ApiRetryFunction
 
             $appService = $using:appservice
             $headers = $using:headers
@@ -1752,6 +1758,9 @@ foreach ($sub in $AllSubscriptions) {
 
         $postgreSQLJobs += Start-Threadjob -ScriptBlock {
 
+            $ApiRetryFunction = $using:def
+            ${function:New-ApiRetryCommand} = $ApiRetryFunction
+
             $server = $using:server
             $headers = $using:headers
             $sub = $using:sub
@@ -2223,6 +2232,9 @@ foreach ($sub in $AllSubscriptions) {
         Write-Output "Checking CosmosDB account $($cosmosAcct.name)..."
 
         $cosmosDBJobs += Start-Threadjob -ScriptBlock {
+
+            $ApiRetryFunction = $using:def
+            ${function:New-ApiRetryCommand} = $ApiRetryFunction
             
             $cosmosAcct = $using:cosmosAcct
             $headers = $using:headers
@@ -2519,6 +2531,9 @@ foreach ($sub in $AllSubscriptions) {
         Write-Output "Checking AKS cluster $($aksCluster.name)..."
 
         $aksJobs += Start-Threadjob -ScriptBlock {
+
+            $ApiRetryFunction = $using:def
+            ${function:New-ApiRetryCommand} = $ApiRetryFunction
             
             $aksCluster = $using:aksCluster
             $headers = $using:headers
@@ -2805,6 +2820,9 @@ foreach ($sub in $AllSubscriptions) {
         Write-Output "Checking Azure OpenAI resource $($openAIResource.name)..."
 
         $openAIJobs += Start-Threadjob -ScriptBlock {
+
+            $ApiRetryFunction = $using:def
+            ${function:New-ApiRetryCommand} = $ApiRetryFunction
             
             $openAIResource = $using:openAIResource
             $headers = $using:headers
@@ -2986,6 +3004,9 @@ foreach ($sub in $AllSubscriptions) {
         Write-Output "Checking SQL Database $($sqlDb.name)..."
 
         $sqlDbJobs += Start-Threadjob -ScriptBlock {
+
+            $ApiRetryFunction = $using:def
+            ${function:New-ApiRetryCommand} = $ApiRetryFunction
             
             $sqlDb = $using:sqlDb
             $headers = $using:headers
@@ -3229,6 +3250,9 @@ foreach ($sub in $AllSubscriptions) {
         Write-Output "Checking SQL Managed Instance $($sqlMi.name)..."
 
         $sqlMiJobs += Start-Threadjob -ScriptBlock {
+
+            $ApiRetryFunction = $using:def
+            ${function:New-ApiRetryCommand} = $ApiRetryFunction
             
             $sqlMi = $using:sqlMi
             $headers = $using:headers
@@ -3409,6 +3433,9 @@ foreach ($sub in $AllSubscriptions) {
         Write-Output "Checking Databricks Workspace $($databricks.name)..."
 
         $databricksJobs += Start-Threadjob -ScriptBlock {
+
+            $ApiRetryFunction = $using:def
+            ${function:New-ApiRetryCommand} = $ApiRetryFunction
             
             $databricks = $using:databricks
             $headers = $using:headers
@@ -3593,6 +3620,9 @@ foreach ($sub in $AllSubscriptions) {
         Write-Output "Checking Application Gateway $($appGateway.name)..."
 
         $appGatewayJobs += Start-Threadjob -ScriptBlock {
+
+            $ApiRetryFunction = $using:def
+            ${function:New-ApiRetryCommand} = $ApiRetryFunction
             
             $appGateway = $using:appGateway
             $headers = $using:headers
@@ -3869,6 +3899,9 @@ foreach ($sub in $AllSubscriptions) {
         Write-Output "Checking Load Balancer $($loadBalancer.name)..."
 
         $loadBalancerJobs += Start-Threadjob -ScriptBlock {
+
+            $ApiRetryFunction = $using:def
+            ${function:New-ApiRetryCommand} = $ApiRetryFunction
             
             $loadBalancer = $using:loadBalancer
             $headers = $using:headers
@@ -4020,6 +4053,9 @@ foreach ($sub in $AllSubscriptions) {
         Write-Output "Checking Service Bus $($serviceBus.name)..."
 
         $serviceBusJobs += Start-Threadjob -ScriptBlock {
+
+            $ApiRetryFunction = $using:def
+            ${function:New-ApiRetryCommand} = $ApiRetryFunction
             
             $serviceBus = $using:serviceBus
             $headers = $using:headers
@@ -4215,6 +4251,9 @@ foreach ($sub in $AllSubscriptions) {
         Write-Output "Checking Log Analytics workspace $($logAnalytics.name)..."
 
         $logAnalyticsJobs += Start-Threadjob -ScriptBlock {
+
+            $ApiRetryFunction = $using:def
+            ${function:New-ApiRetryCommand} = $ApiRetryFunction
             
             $logAnalytics = $using:logAnalytics
             $headers = $using:headers
