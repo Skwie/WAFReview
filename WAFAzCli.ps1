@@ -6,11 +6,14 @@
   This script makes an inventory of specific or all fscp 3.0 subscriptions, and runs Azure REST API calls against those subscriptions to determine if resources in those subscriptions are in line with the Microsoft Azure Well-Architected Framework.
 
 .PARAMETER <SubscriptionIds>
-  Optional. An array of IDs for the subscriptions that you want to assess. If no SubscriptionId is entered, the script runs for all subscriptions.
+  Optional. An array of IDs for the subscriptions that you want to assess. If no SubscriptionId is entered, the script runs for all subscriptions to which the user has access.
   Example: @('b6307584-2248-4e8b-a911-2d7f1bd2613a', 'c405e642-15db-4786-9426-1e23c84d225a')
 
 .PARAMETER <Filter>
   Optional. If a string is entered here, the script will only evaluate subscriptions where the name matches the given string. Note that this param is not evaluated if the SubscriptionIds param is filled.
+
+.PARAMETER <Pillars>
+  Optional. If a string is entered here, the script will only evaluate controls that are part of the given pillar. The string should be one of the following: Security, Reliability, Operational Excellence, Cost Optimization, Performance Efficiency.
 
 .PARAMETER <GeneratePowerPoint>
   Optional. If GeneratePowerPoint is true, the script will generate a PowerPoint presentation based on the results of the assessment.  
@@ -20,13 +23,13 @@
   The script optionally also outputs a PowerPoint presentation with the results of the assessment.
 
 .NOTES
-  Version:        0.8.7
+  Version:        0.8.8
   Author:         Jordy Groenewoud
   Creation Date:  27/03/2024
-  Last Updated:   12/11/2024
+  Last Updated:   17/03/2025
   
 .EXAMPLE
-  .\WAFAzCli.ps1 -Filter "-p-lz"
+  .\WAFAzCli.ps1 -Filter "-p-lz" -Pillars "Security"
   .\WAFAzCli.ps1 -SubscriptionIds @('b6307584-2248-4e8b-a911-2d7f1bd2613a', 'c405e642-15db-4786-9426-1e23c84d225a') -GeneratePowerPoint $True
 
 #>
@@ -42,6 +45,9 @@ param
     $Filter,
 
     [Parameter(Mandatory=$false)]
+    [Array]$Pillars,
+
+    [Parameter(Mandatory=$false)]
     $GeneratePowerPoint = $false
 )
 
@@ -51,6 +57,7 @@ param
 . $PSScriptRoot\Get-AllWeightedAveragesPerService.ps1
 . $PSScriptRoot\New-RetryCommand.ps1
 . $PSScriptRoot\New-ApiRetryCommand.ps1
+
 # Create a definition for ApiRetryCommand so we can use it in threadjobs
 $def = @(
     ${function:New-ApiRetryCommand}.ToString()
@@ -61,6 +68,10 @@ $def = @(
 ################# Region Setup #####################
 
 $Error.Clear()
+
+if ($Pillars -eq $null) {
+    $Pillars = @('Security', 'Reliability', 'Operational Excellence', 'Cost Optimization', 'Performance Efficiency', 'Custom')
+}
 
 if (!$azsession) {
     $azsession = New-RetryCommand -command "az login" -args @{}
@@ -4519,38 +4530,14 @@ foreach ($sub in $AllSubscriptions) {
         }
     }
 
-    $finalAverageArray = @(
-        [PSCustomObject]@{
-            Pillar = "Reliability Pillar"
+    $finalAverageArray = @()
+    foreach ($pill in $Pillars) {
+        $finalAverageArray += [PSCustomObject]@{
+            Pillar = $pill
             Count = 0
             Average = 0
         }
-        [PSCustomObject]@{
-            Pillar = "Security Pillar"
-            Count = 0
-            Average = 0
-        }
-        [PSCustomObject]@{
-            Pillar = "Operational Excellence Pillar"
-            Count = 0
-            Average = 0
-        }
-        [PSCustomObject]@{
-            Pillar = "Cost Optimization Pillar"
-            Count = 0
-            Average = 0
-        }
-        [PSCustomObject]@{
-            Pillar = "Performance Efficiency Pillar"
-            Count = 0
-            Average = 0
-        }
-        [PSCustomObject]@{
-            Pillar = "Custom Checks"
-            Count = 0
-            Average = 0
-        }
-    )
+    }
 
     # Loop through all weighted averages to get a count for each pillar
     foreach ($weightedAverage in $allWeightedAverages) {
@@ -4586,7 +4573,6 @@ foreach ($sub in $AllSubscriptions) {
     }
     $WAFResults += ""
     $WAFResults += "Note that a score of 0 % may indicate that the evaluated resources have no related checks in that pillar."
-    $WAFResults += "The Custom Checks section is not part of the Microsoft WAF, and is used for additional checks."
     $WAFResults += ""
 
     # End region
