@@ -23,11 +23,11 @@ function Get-AllWeightedAveragesPerService($controlArray) {
     $performanceEfficiencyWeightedAverage = Get-WeightedAverage($performanceEfficiencyScores)
     $customWeightedAverage = Get-WeightedAverage($customScores)
 
-    if ($reliabilityWeightedAverage -notmatch 'NaN') {$allSrvcWeightedAverages += "Reliability Pillar;$reliabilityWeightedAverage"}
-    if ($securityWeightedAverage -notmatch 'NaN') {$allSrvcWeightedAverages += "Security Pillar;$securityWeightedAverage"}
-    if ($operationalExcellenceWeightedAverage -notmatch 'NaN') {$allSrvcWeightedAverages += "Operational Excellence Pillar;$operationalExcellenceWeightedAverage"}
-    if ($costOptimizationWeightedAverage -notmatch 'NaN') {$allSrvcWeightedAverages += "Cost Optimization Pillar;$costOptimizationWeightedAverage"}
-    if ($performanceEfficiencyWeightedAverage -notmatch 'NaN') {$allSrvcWeightedAverages += "Performance Efficiency Pillar;$performanceEfficiencyWeightedAverage"}
+    if ($reliabilityWeightedAverage -notmatch 'NaN') {$allSrvcWeightedAverages += "Reliability;$reliabilityWeightedAverage"}
+    if ($securityWeightedAverage -notmatch 'NaN') {$allSrvcWeightedAverages += "Security;$securityWeightedAverage"}
+    if ($operationalExcellenceWeightedAverage -notmatch 'NaN') {$allSrvcWeightedAverages += "Operational Excellence;$operationalExcellenceWeightedAverage"}
+    if ($costOptimizationWeightedAverage -notmatch 'NaN') {$allSrvcWeightedAverages += "Cost Optimization;$costOptimizationWeightedAverage"}
+    if ($performanceEfficiencyWeightedAverage -notmatch 'NaN') {$allSrvcWeightedAverages += "Performance Efficiency;$performanceEfficiencyWeightedAverage"}
     if ($customWeightedAverage -notmatch 'NaN') {$allSrvcWeightedAverages += "Custom Checks;$customWeightedAverage"}
 
     return $allSrvcWeightedAverages
