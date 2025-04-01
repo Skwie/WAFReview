@@ -23,10 +23,10 @@
   The script optionally also outputs a PowerPoint presentation with the results of the assessment.
 
 .NOTES
-  Version:        0.8.8
+  Version:        0.8.9
   Author:         Jordy Groenewoud
   Creation Date:  27/03/2024
-  Last Updated:   17/03/2025
+  Last Updated:   01/04/2025
   
 .EXAMPLE
   .\WAFAzCli.ps1 -Filter "-p-lz" -Pillars "Security"
@@ -70,7 +70,7 @@ $def = @(
 $Error.Clear()
 
 if ($Pillars -eq $null) {
-    $Pillars = @('Security', 'Reliability', 'Operational Excellence', 'Cost Optimization', 'Performance Efficiency', 'Custom')
+    $Pillars = @('Security', 'Reliability', 'Operational Excellence', 'Cost Optimization', 'Performance Efficiency')
 }
 
 if (!$azsession) {
@@ -165,10 +165,10 @@ foreach ($sub in $AllSubscriptions) {
         "Organize data into access tiers;Cost Optimization;60"
         "Use lifecycle policy to move data between access tiers;Cost Optimization;60"
         "Check for Publicly Accessible Web Containers;Security;80"
-        "Configure Minimum TLS Version;Custom;95"
-        "Enable Infrastructure Encryption;Custom;85"
-        "Private Endpoint in Use;Custom;100"
-        "Storage Account Encryption using Customer Managed Keys;Custom;50"
+        "Configure Minimum TLS Version;Security;95"
+        "Enable Infrastructure Encryption;Security;85"
+        "Private Endpoint in Use;Security;100"
+        "Storage Account Encryption using Customer Managed Keys;Security;50"
     )
 
     $StorageResults = @()
@@ -537,16 +537,16 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     $KeyvaultControls = @(
-        "Check for presence of AppName tag;Custom;80"
-        "Check for presence of CI tag;Custom;80"
-        "Check for presence of CIA tag;Custom;80"
-        "Check for Key Vault Full Administrator Permissions;Custom;75"
-        "Audit event logging should be active for Azure Key Vault;Custom;90"
-        "Purge Protection should be enabled for Azure Key Vault;Custom;75"
-        "Soft Delete should be enabled for Azure Key Vault;Custom;75"
-        "Allow trusted Microsoft services to access the Key Vault;Custom;60"
-        "Restrict Default Network Access for Azure Key Vaults;Custom;80"
-        "Private Endpoint in Use;Custom;100"
+        "Check for presence of AppName tag;Operational Excellence;80"
+        "Check for presence of CI tag;Operational Excellence;80"
+        "Check for presence of CIA tag;Operational Excellence;80"
+        "Check for Key Vault Full Administrator Permissions;Security;75"
+        "Audit event logging should be active for Azure Key Vault;Security;90"
+        "Purge Protection should be enabled for Azure Key Vault;Reliability,Security;75"
+        "Soft Delete should be enabled for Azure Key Vault;Reliability;75"
+        "Allow trusted Microsoft services to access the Key Vault;Operational Excellence;60"
+        "Restrict Default Network Access for Azure Key Vaults;Security;80"
+        "Private Endpoint in Use;Security;100"
     )
 
     $VaultResults = @()
@@ -557,9 +557,6 @@ foreach ($sub in $AllSubscriptions) {
 
     $kvTotalAvg = 0
     $kvTotalScore = 0
-
-    # Note: There are no controls described for Key Vaults in the Microsoft WAF documentation.
-    # We will primarily be using custom ABN checks.
 
     $vaultJobs = @()
     $kvControlArrayList = @()
@@ -764,9 +761,9 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     $VMControls = @(
-        "Check for presence of AppName tag;Custom;80"
-        "Check for presence of CI tag;Custom;80"
-        "Check for presence of CIA tag;Custom;80"
+        "Check for presence of AppName tag;Operational Excellence;80"
+        "Check for presence of CI tag;Operational Excellence;80"
+        "Check for presence of CIA tag;Operational Excellence;80"
         "Restrict public IP addresses for Azure Virtual Machines;Security;80"
         "Restrict IP forwarding for Azure Virtual Machines;Security;80"
         "Check if VM network interfaces have a Network Security Group attached;Security;80"
@@ -778,10 +775,10 @@ foreach ($sub in $AllSubscriptions) {
         "Enable VM Insights for Azure Virtual Machines;Operational Excellence;70"
         "Enable boot diagnostics for Azure Virtual Machines;Operational Excellence;70"
         "Enable accelerated networking for Azure Virtual Machines;Performance Efficiency;70"
-        "Use Managed Disks for Azure Virtual Machines;Custom;80"
-        "Disable Premium SSD for Azure Virtual Machines;Custom;80"
-        "Enable JIT Access for Azure Virtual Machines;Custom;80"
-        "Enable VM Backup for Azure Virtual Machines;Custom;80"
+        "Use Managed Disks for Azure Virtual Machines;Cost Optimization;80"
+        "Disable Premium SSD for Azure Virtual Machines;Cost Optimization;80"
+        "Enable JIT Access for Azure Virtual Machines;Security;80"
+        "Enable VM Backup for Azure Virtual Machines;Reliability;80"
     )
 
     $VMResults = @()
@@ -1164,20 +1161,20 @@ foreach ($sub in $AllSubscriptions) {
         "Enable Autoscale to ensure adequate resources are available to service requests;Reliability,Operational Excellence;60"
         "Enable Application Insights Alerts to signal fault conditions;Reliability,Operational Excellence;80"
         "Use a scale-out and scale-in rule combination to optimize costs;Cost Optimization;80"
-        "Check for Latest Version of .NET Framework;Custom;80"
-        "Check for latest version of Java;Custom;80"
-        "Check for Latest Version of PHP;Custom;80"
-        "Check for Latest Version of Python;Custom;80"
-        "Check for sufficient backup retention period;Custom;80"
-        "Check for TLS protocol version;Custom;90"
+        "Check for Latest Version of .NET Framework;Reliability,Security;80"
+        "Check for Latest version of Java;Reliability,Security;80"
+        "Check for Latest Version of PHP;Reliability,Security;80"
+        "Check for Latest Version of Python;Reliability,Security;80"
+        "Check for sufficient backup retention period;Reliability;80"
+        "Check for TLS protocol version;Reliability,Security;90"
         "Check that Azure App Service is using the latest version of HTTP;Performance Efficiency;80"
-        "Check if the Azure App Service requests incoming client certificates;Custom;80"
-        "Disable plain FTP deployment;Custom;80"
-        "Disable remote debugging;Custom;80"
-        "Enable App Service Authentication;Custom;80"
-        "Enable HTTPS-only traffic;Custom;80"
-        "Enable registration with Microsoft Entra ID;Custom;80"
-        "Private Endpoint in Use;Custom;100"
+        "Check if the Azure App Service requests incoming client certificates;Security;80"
+        "Disable plain FTP deployment;Security;80"
+        "Disable remote debugging;Security;80"
+        "Enable App Service Authentication;Security;80"
+        "Enable HTTPS-only traffic;Security;80"
+        "Enable registration with Microsoft Entra ID;Operational Excellence;80"
+        "Private Endpoint in Use;Security;100"
     )
 
     $AppServiceResults = @()
@@ -1743,15 +1740,15 @@ foreach ($sub in $AllSubscriptions) {
         "Use Azure Active Directory for authentication and authorization to enhance identity management;Security;90"
         "Deploy to the same region as the app;Cost Optimization;80"
         "Set up automated backups and retention policies to maintain data availability and meet compliance requirements;Operational Excellence;90"
-        "Check for PostgreSQL Log Retention Period;Custom;80"
-        "Check for PostgreSQL Major Version;Custom;80"
-        "Disable 'Allow access to Azure services' for PostgreSQL database servers;Custom;80"
-        "Enable 'CONNECTION_THROTTLING' Parameter for PostgreSQL Servers;Custom;80"
-        "Enable 'LOG_CHECKPOINTS' Parameter for PostgreSQL Servers;Custom;80"
-        "Enable 'LOG_CONNECTIONS' Parameter for PostgreSQL Servers;Custom;80"
-        "Enable 'LOG_DISCONNECTIONS' Parameter for PostgreSQL Servers;Custom;80"
-        "Enable 'LOG_DURATION' Parameter for PostgreSQL Servers;Custom;80"
-        "Enable Storage Auto-Growth;Custom;80"
+        "Check for PostgreSQL Log Retention Period;Security,Operational Excellence;80"
+        "Check for PostgreSQL Major Version;Reliability,Security;80"
+        "Disable 'Allow access to Azure services' for PostgreSQL database servers;Security;80"
+        "Enable 'CONNECTION_THROTTLING' Parameter for PostgreSQL Servers;Reliability,Security;80"
+        "Enable 'LOG_CHECKPOINTS' Parameter for PostgreSQL Servers;Reliability,Security;80"
+        "Enable 'LOG_CONNECTIONS' Parameter for PostgreSQL Servers;Reliability,Security;80"
+        "Enable 'LOG_DISCONNECTIONS' Parameter for PostgreSQL Servers;Reliability,Security;80"
+        "Enable 'LOG_DURATION' Parameter for PostgreSQL Servers;Reliability,Security;80"
+        "Enable Storage Auto-Growth;Cost Optimization;80"
     )
 
     $PostgreSQLResults = @()
@@ -2226,7 +2223,7 @@ foreach ($sub in $AllSubscriptions) {
         "Implement time-to-live (TTL) to remove unused items;Cost Optimization;80"
         "Create alerts associated with host machine resources;Operational Excellence;80"
         "Create alerts for throughput throttling;Operational Excellence;80"
-        "Restrict default network access;Custom;80"
+        "Restrict default network access;Security;80"
     )
 
     $CosmosDBResults = @()
@@ -2814,7 +2811,7 @@ foreach ($sub in $AllSubscriptions) {
         "Disable public access to Azure OpenAI unless your workload requires it;Security;90"
         "Use customer-managed keys for fine-tuned models and training data that's uploaded to Azure OpenAI;Security;80"
         "Enable and configure Diagnostics for the Azure OpenAI Service;Operational Excellence;80"
-        "Ensure that Azure OpenAI service instances don't have administrative privileges;Custom;90"
+        "Ensure that Azure OpenAI service instances don't have administrative privileges;Security;90"
     )
 
     $OpenAIResults = @()
