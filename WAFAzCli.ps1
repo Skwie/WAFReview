@@ -4420,9 +4420,11 @@ foreach ($sub in $AllSubscriptions) {
     ################ Region Score by Pillars #################
 
     $allWeightedAverages = @()
+    $totalList = @()
 
     # Get all weighted averages for each service
     if ($strgControlArrayList) {
+        $totalList += $strgControlArrayList
         $allStrgWeightedAverages = Get-AllWeightedAveragesPerService($strgControlArrayList)
         foreach ($strgWeightedAverage in $allStrgWeightedAverages) {
             $allWeightedAverages += $strgWeightedAverage
@@ -4430,6 +4432,7 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     if ($kvControlArray) {
+        $totalList += $kvControlArrayList
         $allKvWeightedAverages = Get-AllWeightedAveragesPerService($kvControlArrayList)
         foreach ($kvWeightedAverage in $allKvWeightedAverages) {
             $allWeightedAverages += $kvWeightedAverage
@@ -4437,6 +4440,7 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     if ($vmControlArray) {
+        $totalList += $vmControlArrayList
         $allVmWeightedAverages = Get-AllWeightedAveragesPerService($vmControlArrayList)
         foreach ($vmWeightedAverage in $allVmWeightedAverages) {
             $allWeightedAverages += $vmWeightedAverage
@@ -4444,6 +4448,7 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     if ($appServiceControlArray) {
+        $totalList += $appServiceControlArrayList
         $allAppServiceWeightedAverages = Get-AllWeightedAveragesPerService($appServiceControlArrayList)
         foreach ($appServiceWeightedAverage in $allAppServiceWeightedAverages) {
             $allWeightedAverages += $appServiceWeightedAverage
@@ -4451,6 +4456,7 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     if ($postgreSQLControlArray) {
+        $totalList += $postgreSQLControlArrayList
         $allPostgreSQLWeightedAverages = Get-AllWeightedAveragesPerService($postgreSQLControlArrayList)
         foreach ($postgreSQLWeightedAverage in $allPostgreSQLWeightedAverages) {
             $allWeightedAverages += $postgreSQLWeightedAverage
@@ -4458,6 +4464,7 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     if ($CosmosDBControlArray) {
+        $totalList += $cosmosDBControlArrayList
         $allCosmosDBWeightedAverages = Get-AllWeightedAveragesPerService($cosmosDBControlArrayList)
         foreach ($cosmosDBWeightedAverage in $allCosmosDBWeightedAverages) {
             $allWeightedAverages += $cosmosDBWeightedAverage
@@ -4465,6 +4472,7 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     if ($AKSControlArray) {
+        $totalList += $aksControlArrayList
         $allAKSWeightedAverages = Get-AllWeightedAveragesPerService($aksControlArrayList)
         foreach ($aksWeightedAverage in $allAKSWeightedAverages) {
             $allWeightedAverages += $aksWeightedAverage
@@ -4472,6 +4480,7 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     if ($OpenAIControlArray) {
+        $totalList += $openAIControlArrayList
         $allOpenAIWeightedAverages = Get-AllWeightedAveragesPerService($openAIControlArrayList)
         foreach ($openAIWeightedAverage in $allOpenAIWeightedAverages) {
             $allWeightedAverages += $openAIWeightedAverage
@@ -4479,6 +4488,7 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     if ($sqlDbControlArray) {
+        $totalList += $sqlDbControlArrayList
         $allSQLDbWeightedAverages = Get-AllWeightedAveragesPerService($sqlDbControlArrayList)
         foreach ($sqlDbWeightedAverage in $allSQLDbWeightedAverages) {
             $allWeightedAverages += $sqlDbWeightedAverage
@@ -4486,6 +4496,7 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     if ($sqlMiControlArray) {
+        $totalList += $sqlMiControlArrayList
         $allSQLMiWeightedAverages = Get-AllWeightedAveragesPerService($sqlMiControlArrayList)
         foreach ($sqlMiWeightedAverage in $allSQLMiWeightedAverages) {
             $allWeightedAverages += $sqlMiWeightedAverage
@@ -4493,6 +4504,7 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     if ($databricksControlArray) {
+        $totalList += $databricksControlArrayList
         $allDatabricksWeightedAverages = Get-AllWeightedAveragesPerService($databricksControlArrayList)
         foreach ($databricksWeightedAverage in $allDatabricksWeightedAverages) {
             $allWeightedAverages += $databricksWeightedAverage
@@ -4500,6 +4512,7 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     if ($appGatewayControlArray) {
+        $totalList += $appGatewayControlArrayList
         $allAppGatewayWeightedAverages = Get-AllWeightedAveragesPerService($appGatewayControlArrayList)
         foreach ($appGatewayWeightedAverage in $allAppGatewayWeightedAverages) {
             $allWeightedAverages += $appGatewayWeightedAverage
@@ -4507,6 +4520,7 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     if ($loadBalancerControlArray) {
+        $totalList += $loadBalancerControlArrayList
         $allLoadBalancerWeightedAverages = Get-AllWeightedAveragesPerService($loadBalancerControlArrayList)
         foreach ($loadBalancerWeightedAverage in $allLoadBalancerWeightedAverages) {
             $allWeightedAverages += $loadBalancerWeightedAverage
@@ -4514,6 +4528,7 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     if ($serviceBusControlArray) {
+        $totalList += $serviceBusControlArrayList
         $allServiceBusWeightedAverages = Get-AllWeightedAveragesPerService($serviceBusControlArrayList)
         foreach ($serviceBusWeightedAverage in $allServiceBusWeightedAverages) {
             $allWeightedAverages += $serviceBusWeightedAverage
@@ -4521,6 +4536,7 @@ foreach ($sub in $AllSubscriptions) {
     }
 
     if ($logAnalyticsControlArray) {
+        $totalList += $logAnalyticsControlArrayList
         $allLogAnalyticsWeightedAverages = Get-AllWeightedAveragesPerService($logAnalyticsControlArrayList)
         foreach ($logAnalyticsWeightedAverage in $allLogAnalyticsWeightedAverages) {
             $allWeightedAverages += $logAnalyticsWeightedAverage
@@ -4594,6 +4610,11 @@ foreach ($sub in $AllSubscriptions) {
     if ($Error) {
         $Error > ".\results\errors.txt"
     }
+
+    # Convert results to json format and save to file
+
+    $jsonResults = $totalList | ConvertTo-Json -Depth 10
+    $jsonResults | Out-File -FilePath ( New-Item -Path ".\results\$($sub.name).json" -Force )
 
     # End region
 
