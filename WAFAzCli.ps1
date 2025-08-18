@@ -169,6 +169,9 @@ foreach ($sub in $AllSubscriptions) {
         "Enable Infrastructure Encryption;Security;85"
         "Private Endpoint in Use;Security;100"
         "Storage Account Encryption using Customer Managed Keys;Security;50"
+        "Configure Vaulted Backup for blob storage;Reliability,Security,Operational Excellence;70"
+        "Don't use SAS tokens for storage accounts;Security;80"
+        "Disable SFTP support for storage accounts;Security;80"
     )
 
     $StorageResults = @()
@@ -483,6 +486,56 @@ foreach ($sub in $AllSubscriptions) {
                 $strgControlArray[17].Result = 0
             }
 
+            # Configure Vaulted Backup for blob storage
+            if ($strg.properties.blobServices) {
+                $tempStorageResults += "Good: Vaulted Backup is configured for blob storage in storage account $($strg.name)."
+                $strgControlArray[18].Result = 100
+            }
+            else {
+                $tempStorageResults += "Bad: Vaulted Backup is NOT configured for blob storage in storage account $($strg.name)."
+                $strgControlArray[18].Result = 0
+            }
+
+            # Don't use SAS tokens for storage accounts
+            $uri = "https://management.azure.com$($strg.id)/listKeys?api-version=2023-05-01"
+            try {
+                $keys = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10 -ErrorAction SilentlyContinue).keys
+            }
+            catch {
+                $keys = $null
+            }
+            if ($keys -and $keys.Count -gt 0) {
+                $sasTokens = $false
+                foreach ($key in $keys) {
+                    if ($key.permissions -match 's') {
+                        $tempStorageResults += "Bad: SAS token found for storage account $($strg.name)."
+                        $sasTokens = $true
+                    }
+                }
+                if (!$sasTokens) {
+                    $tempStorageResults += "Good: No SAS tokens found for storage account $($strg.name)."
+                    $strgControlArray[19].Result = 100
+                }
+                else {
+                    $strgControlArray[19].Result = 0
+                }
+            }
+            else {
+                $tempStorageResults += "Informational: No keys found for storage account $($strg.name)."
+                $strgControlArray[19].Result = 0
+                $strgControlArray[19].Weight = 0
+            }
+
+            # Disable SFTP support for storage accounts
+            if ($strg.properties.supportsSftp -match 'False') {
+                $tempStorageResults += "Good: SFTP support is disabled for storage account $($strg.name)."
+                $strgControlArray[20].Result = 100
+            }
+            else {
+                $tempStorageResults += "Bad: SFTP support is enabled for storage account $($strg.name)."
+                $strgControlArray[20].Result = 0
+            }
+
             # Calculate total weight to calculate weighted average
             $strgTotalWeight = 0
             foreach ($control in $strgControlArray) {
@@ -547,6 +600,7 @@ foreach ($sub in $AllSubscriptions) {
         "Allow trusted Microsoft services to access the Key Vault;Operational Excellence;60"
         "Restrict Default Network Access for Azure Key Vaults;Security;80"
         "Private Endpoint in Use;Security;100"
+        "Ensure RBAC is enabled for Key Vault;Security;80"
     )
 
     $VaultResults = @()
@@ -704,6 +758,16 @@ foreach ($sub in $AllSubscriptions) {
                 $kvControlArray[9].Result = 0
             }
 
+            # Ensure RBAC is enabled for Key Vault
+            if ($vaultsettings.properties.enableRbacAuthorization -eq $True) {
+                $tempVaultResults += "Good: RBAC is enabled for keyvault $($keyvault.name)."
+                $kvControlArray[10].Result = 100
+            }
+            else {
+                $tempVaultResults += "Bad: RBAC is NOT enabled for keyvault $($keyvault.name)."
+                $kvControlArray[10].Result = 0
+            }
+
             # Calculate total weight to calculate weighted average
             $kvTotalWeight = 0
             foreach ($control in $kvControlArray) {
@@ -779,6 +843,8 @@ foreach ($sub in $AllSubscriptions) {
         "Disable Premium SSD for Azure Virtual Machines;Cost Optimization;80"
         "Enable JIT Access for Azure Virtual Machines;Security;80"
         "Enable VM Backup for Azure Virtual Machines;Reliability;80"
+        "Free up CPU resources by using Azure Boost;Performance Efficiency,Cost Optimization;70"
+        "Enable Accelerated Networking for Azure Virtual Machines;Performance Efficiency;70"
     )
 
     $VMResults = @()
@@ -1091,6 +1157,34 @@ foreach ($sub in $AllSubscriptions) {
                 $vmControlArray[17].Result = 0
             }
 
+            # Free up CPU resources by using Azure Boost
+            if ($vm.properties.additionalCapabilities -and $vm.properties.additionalCapabilities.enableVmBoost) {
+                $tempVMResults += "Good: Azure Boost is enabled for VM $($vm.name)"
+                $vmControlArray[18].Result = 100
+            }
+            else {
+                $tempVMResults += "Bad: Azure Boost is NOT enabled for VM $($vm.name)"
+                $vmControlArray[18].Result = 0
+            }
+
+            # Enable Accelerated Networking for Azure Virtual Machines
+            $accelerationEnabled = $false
+            foreach ($nic in $VmNICs) {
+                if ($nic.enableAcceleratedNetworking) {
+                    $tempVMResults += "Good: Accelerated Networking is enabled on NIC $($nic.name) for VM $($vm.name)"
+                    $accelerationEnabled = $true
+                }
+                else {
+                    $tempVMResults += "Bad: Accelerated Networking is NOT enabled on NIC $($nic.name) for VM $($vm.name)"
+                }
+            }
+            if ($accelerationEnabled) {
+                $vmControlArray[19].Result = 100
+            }
+            else {
+                $vmControlArray[19].Result = 0
+            }
+
             # Calculate total weight to calculate weighted average
             $vmTotalWeight = 0
             foreach ($control in $vmControlArray) {
@@ -1175,6 +1269,14 @@ foreach ($sub in $AllSubscriptions) {
         "Enable HTTPS-only traffic;Security;80"
         "Enable registration with Microsoft Entra ID;Operational Excellence;80"
         "Private Endpoint in Use;Security;100"
+        "Choose the Premium V3 tier;Performance Efficiency;80"
+        "Enable Zone Redundancy;Reliability;80"
+        "Define automatic healing rules;Reliability;80"
+        "Assign Managed Identity to the Web App;Security;80"
+        "Configure Custom Domains for applications;Security;80"
+        "Always use Key Vault references as application settings;Security;80"
+        "Enable Defender for Cloud for App Services;Security;80"
+        "Enable Diagnostic Logging for App Services;Operational Excellence;80"
     )
 
     $AppServiceResults = @()
@@ -1661,6 +1763,90 @@ foreach ($sub in $AllSubscriptions) {
                     $appServiceControlArray[28].Result = 0
                 }
 
+                # Choose the Premium V3 tier
+                if ($appService.sku.tier -match 'PremiumV3') {
+                    $tempAppServiceResults += "Good: Premium V3 tier is used for App Service $($appservice.name)"
+                    $appServiceControlArray[29].Result = 100
+                }
+                else {
+                    $tempAppServiceResults += "Bad: Premium V3 tier is NOT used for App Service $($appservice.name)"
+                    $appServiceControlArray[29].Result = 0
+                }
+
+                # Enable Zone Redundancy
+                if ($appService.sku.capacity -gt 1 -and $appService.sku.zoneRedundant -match 'True') {
+                    $tempAppServiceResults += "Good: Zone Redundancy is enabled for App Service $($appservice.name)"
+                    $appServiceControlArray[30].Result = 100
+                }
+                else {
+                    $tempAppServiceResults += "Bad: Zone Redundancy is NOT enabled for App Service $($appservice.name)"
+                    $appServiceControlArray[30].Result = 0
+                }
+
+                # Define automatic healing rules
+                if ($appConfig.autoHealEnabled -match 'True') {
+                    $tempAppServiceResults += "Good: Automatic healing rules are defined for App Service $($appservice.name)"
+                    $appServiceControlArray[31].Result = 100
+                }
+                else {
+                    $tempAppServiceResults += "Bad: Automatic healing rules are NOT defined for App Service $($appservice.name)"
+                    $appServiceControlArray[31].Result = 0
+                }
+
+                # Assign Managed Identity to the Web App
+                if ($appService.identity.type -match 'SystemAssigned' -or $appService.identity.type -match 'UserAssigned') {
+                    $tempAppServiceResults += "Good: Managed Identity is assigned to the Web App for App Service $($appservice.name)"
+                    $appServiceControlArray[32].Result = 100
+                }
+                else {
+                    $tempAppServiceResults += "Bad: Managed Identity is NOT assigned to the Web App for App Service $($appservice.name)"
+                    $appServiceControlArray[32].Result = 0
+                }
+
+                # Configure Custom Domains for applications
+                if ($appService.properties.hostNames -and $appService.properties.hostNames.Count -gt 0) {
+                    $tempAppServiceResults += "Good: Custom domain is assigned to the Web App for App Service $($appservice.name)"
+                    $appServiceControlArray[33].Result = 100
+                }
+                else {
+                    $tempAppServiceResults += "Bad: Custom domain is NOT assigned to the Web App for App Service $($appservice.name)"
+                    $appServiceControlArray[33].Result = 0
+                }
+
+                # Always use Key Vault references as app settings
+                if ($appSettings -and $appSettings -match 'AzureWebJobsStorage') {
+                    $tempAppServiceResults += "Good: Key Vault references are used as app settings for App Service $($appservice.name)"
+                    $appServiceControlArray[34].Result = 100
+                }
+                else {
+                    $tempAppServiceResults += "Bad: Key Vault references are NOT used as app settings for App Service $($appservice.name)"
+                    $appServiceControlArray[34].Result = 0
+                }
+
+                # Enable Defender for Cloud for App Service
+                $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Security/locations/$($appService.location)/defenderForCloudSettings?api-version=2023-01-01"
+                $defenderForCloud = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10 -ErrorAction SilentlyContinue)
+                if ($defenderForCloud && $defenderForCloud.properties && $defenderForCloud.properties.enabled -match 'True') {
+                    $tempAppServiceResults += "Good: Defender for Cloud is enabled for App Service $($appservice.name)"
+                    $appServiceControlArray[35].Result = 100
+                }
+                else {
+                    $tempAppServiceResults += "Bad: Defender for Cloud is NOT enabled for App Service $($appservice.name)"
+                    $appServiceControlArray[35].Result = 0
+                }
+
+                # Enable Diagnostic Logs for App Service
+                $uri = "https://management.azure.com$($appService.id)/diagnosticSettings?api-version=2021-05-01-preview"
+                $diagnosticSettings = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10 -ErrorAction SilentlyContinue)
+                if ($diagnosticSettings) {
+                    $tempAppServiceResults += "Good: Diagnostic Logs are enabled for App Service $($appservice.name)"
+                    $appServiceControlArray[36].Result = 100
+                }
+                else {
+                    $tempAppServiceResults += "Bad: Diagnostic Logs are NOT enabled for App Service $($appservice.name)"
+                    $appServiceControlArray[36].Result = 0
+                }
+
                 # Calculate total weight to calculate weighted average
                 $appServiceTotalWeight = 0
                 foreach ($control in $appServiceControlArray) {
@@ -1749,6 +1935,9 @@ foreach ($sub in $AllSubscriptions) {
         "Enable 'LOG_DISCONNECTIONS' Parameter for PostgreSQL Servers;Reliability,Security;80"
         "Enable 'LOG_DURATION' Parameter for PostgreSQL Servers;Reliability,Security;80"
         "Enable Storage Auto-Growth;Cost Optimization;80"
+        "Connect to your databases over Private Link;Security;90"
+        "Configure Row Level Security (RLS) for sensitive data;Security;90"
+        "Use the Start/Stop feature to manage costs;Cost Optimization;80"
     )
 
     $PostgreSQLResults = @()
@@ -2157,6 +2346,61 @@ foreach ($sub in $AllSubscriptions) {
                 }
             }
 
+            # Connect to your databases over Private Link
+            if ($serverStatus -match 'single') {
+                $uri = "https://management.azure.com$($server.id)/privateEndpointConnections?api-version=2017-12-01"
+                $privateEndpoints = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10 -ErrorAction SilentlyContinue).value
+                if ($privateEndpoints) {
+                    $tempPostgreSQLResults += "Good: Private Link is enabled for PostgreSQL server $($server.name)"
+                    $postgreSQLControlArray[16].Result = 100
+                }
+                else {
+                    $tempPostgreSQLResults += "Bad: Private Link is NOT enabled for PostgreSQL server $($server.name)"
+                    $postgreSQLControlArray[16].Result = 0
+                }
+            }
+            if ($serverStatus -match 'flexible') {
+                $uri = "https://management.azure.com$($server.id)/privateEndpointConnections?api-version=2022-12-01"
+                $privateEndpoints = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10 -ErrorAction SilentlyContinue).value
+                if ($privateEndpoints) {
+                    $tempPostgreSQLResults += "Good: Private Link is enabled for PostgreSQL server $($server.name)"
+                    $postgreSQLControlArray[16].Result = 100
+                }
+                else {
+                    $tempPostgreSQLResults += "Bad: Private Link is NOT enabled for PostgreSQL server $($server.name)"
+                    $postgreSQLControlArray[16].Result = 0
+                }
+            }
+
+            # Configure Row Level Security (RLS) for sensitive data
+            $uri = "https://management.azure.com$($server.id)/configurations/row_level_security?api-version=2022-12-01"
+            $rowLevelSecurity = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10 -ErrorAction SilentlyContinue).properties.value
+            if ($rowLevelSecurity -match 'on') {
+                $tempPostgreSQLResults += "Good: Row Level Security is enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[17].Result = 100
+            }
+            else {
+                $tempPostgreSQLResults += "Bad: Row Level Security is NOT enabled for PostgreSQL server $($server.name)"
+                $postgreSQLControlArray[17].Result = 0
+            }
+
+            # Use the Start/Stop feature to manage costs
+            if ($serverStatus -match 'flexible') {
+                if ($server.properties.startStopEnabled -eq $true) {
+                    $tempPostgreSQLResults += "Good: Start/Stop feature is enabled for PostgreSQL server $($server.name)"
+                    $postgreSQLControlArray[18].Result = 100
+                }
+                else {
+                    $tempPostgreSQLResults += "Bad: Start/Stop feature is NOT enabled for PostgreSQL server $($server.name)"
+                    $postgreSQLControlArray[18].Result = 0
+                }
+            }
+            else {
+                $tempPostgreSQLResults += "Informational: Start/Stop feature is not applicable for PostgreSQL single server $($server.name). Please upgrade to a flexible server ASAP."
+                $postgreSQLControlArray[18].Result = 0
+                $postgreSQLControlArray[18].Weight = 0
+            }
+
             # Calculate total weight to calculate weighted average
             $postgreSQLTotalWeight = 0
             foreach ($control in $postgreSQLControlArray) {
@@ -2224,6 +2468,8 @@ foreach ($sub in $AllSubscriptions) {
         "Create alerts associated with host machine resources;Operational Excellence;80"
         "Create alerts for throughput throttling;Operational Excellence;80"
         "Restrict default network access;Security;80"
+        "Create Virtual Network endpoints and rules;Security;80"
+        "Enable Accelerated Networking on host machines;Performance Efficiency;80"
     )
 
     $CosmosDBResults = @()
@@ -2448,6 +2694,37 @@ foreach ($sub in $AllSubscriptions) {
                 $cosmosDBControlArray[9].Result = 0
             }
 
+            # Create Virtual Network endpoints and rules
+            $uri = "https://management.azure.com$($cosmosAcct.id)/virtualNetworkRules?api-version=2024-08-15"
+            $vnetRules = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10 -ErrorAction SilentlyContinue).value
+            if ($vnetRules) {
+                $tempCosmosDBResults += "Good: Virtual Network endpoints and rules are created for CosmosDB account $($cosmosAcct.name)"
+                $cosmosDBControlArray[10].Result = 100
+            }
+            else {
+                $tempCosmosDBResults += "Bad: Virtual Network endpoints and rules are NOT created for CosmosDB account $($cosmosAcct.name)"
+                $cosmosDBControlArray[10].Result = 0
+            }
+
+            # Enable Accelerated Networking on host machines
+            $uri = "https://management.azure.com$($cosmosAcct.id)/virtualMachines?api-version=2024-08-15"
+            $vmList = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10 -ErrorAction SilentlyContinue).value
+            $acceleratedNetworkingEnabled = $true
+            foreach ($vm in $vmList) {
+                if ($vm.properties.networkProfile.networkInterfaces[0].properties.enableAcceleratedNetworking -ne $true) {
+                    $acceleratedNetworkingEnabled = $false
+                    break
+                }
+            }
+            if ($acceleratedNetworkingEnabled) {
+                $tempCosmosDBResults += "Good: Accelerated Networking is enabled on host machines for CosmosDB account $($cosmosAcct.name)"
+                $cosmosDBControlArray[11].Result = 100
+            }
+            else {
+                $tempCosmosDBResults += "Bad: Accelerated Networking is NOT enabled on host machines for CosmosDB account $($cosmosAcct.name)"
+                $cosmosDBControlArray[11].Result = 0
+            }
+
             # Calculate total weight to calculate weighted average
             $cosmosDBTotalWeight = 0
             foreach ($control in $cosmosDBControlArray) {
@@ -2523,6 +2800,11 @@ foreach ($sub in $AllSubscriptions) {
         "Ensure that public access to Kubernetes API server is restricted;Security;90"
         "Ensure that AKS clusters are configured to use the Network Contributor role;Security;90"
         "Ensure that Azure Kubernetes clusters are using a private Key Vault for secret data encryption;Security;90"   
+        "Keep the system node pool isolated from user workloads;Security;90"
+        "Use Azure Backup with AKS;Reliability;80"
+        "Use Managed Identities on the cluster;Security;90"
+        "Use Microsoft Entra Workload ID;Security;90"
+        "Use Kubernetes Event Driven Autoscaler;Performance Efficiency;80"
     )
 
     $AKSResults = @()
@@ -2750,6 +3032,56 @@ foreach ($sub in $AllSubscriptions) {
                 $aksControlArray[16].Result = 0
             }
 
+            # Keep the system node pool isolated from user workloads
+            if ($clusterDetails.agentPoolProfiles[0].mode -match "System") {
+                $tempAKSResults += "Good: System node pool is isolated from user workloads for AKS cluster $($aksCluster.name)"
+                $aksControlArray[17].Result = 100
+            }
+            else {
+                $tempAKSResults += "Bad: System node pool is NOT isolated from user workloads for AKS cluster $($aksCluster.name)"
+                $aksControlArray[17].Result = 0
+            }
+
+            # Use Azure Backup with AKS
+            if ($clusterDetails.enableBackup -match "True") {
+                $tempAKSResults += "Good: Azure Backup is used with AKS cluster $($aksCluster.name)"
+                $aksControlArray[18].Result = 100
+            }
+            else {
+                $tempAKSResults += "Bad: Azure Backup is NOT used with AKS cluster $($aksCluster.name)"
+                $aksControlArray[18].Result = 0
+            }
+
+            # Use Managed Identities on the cluster
+            if ($clusterDetails.identityProfile.type -match "SystemAssigned") {
+                $tempAKSResults += "Good: Managed Identities are used on the cluster for AKS cluster $($aksCluster.name)"
+                $aksControlArray[19].Result = 100
+            }
+            else {
+                $tempAKSResults += "Bad: Managed Identities are NOT used on the cluster for AKS cluster $($aksCluster.name)"
+                $aksControlArray[19].Result = 0
+            }
+
+            # Use Microsoft Entra Workload ID
+            if ($clusterDetails.identityProfile.type -match "UserAssigned") {
+                $tempAKSResults += "Good: Microsoft Entra Workload ID is used for AKS cluster $($aksCluster.name)"
+                $aksControlArray[20].Result = 100
+            }
+            else {
+                $tempAKSResults += "Bad: Microsoft Entra Workload ID is NOT used for AKS cluster $($aksCluster.name)"
+                $aksControlArray[20].Result = 0
+            }
+
+            # Use Kubernetes Event Driven Autoscaler
+            if ($clusterDetails.enableKeda -match "True") {
+                $tempAKSResults += "Good: Kubernetes Event Driven Autoscaler is used for AKS cluster $($aksCluster.name)"
+                $aksControlArray[21].Result = 100
+            }
+            else {
+                $tempAKSResults += "Bad: Kubernetes Event Driven Autoscaler is NOT used for AKS cluster $($aksCluster.name)"
+                $aksControlArray[21].Result = 0
+            }
+
             # Calculate total weight to calculate weighted average
             $aksTotalWeight = 0
             foreach ($control in $aksControlArray) {
@@ -2812,6 +3144,8 @@ foreach ($sub in $AllSubscriptions) {
         "Use customer-managed keys for fine-tuned models and training data that's uploaded to Azure OpenAI;Security;80"
         "Enable and configure Diagnostics for the Azure OpenAI Service;Operational Excellence;80"
         "Ensure that Azure OpenAI service instances don't have administrative privileges;Security;90"
+        "Store keys in Azure Key Vault;Security;90"
+        "Use Entra ID for authentication;Security;90"
     )
 
     $OpenAIResults = @()
@@ -2925,6 +3259,27 @@ foreach ($sub in $AllSubscriptions) {
             else {
                 $tempOpenAIResults += "Bad: Azure OpenAI service instances have administrative privileges for OpenAI resource $($openAIResource.name)"
             }
+
+            # Store keys in Azure Key Vault
+            if ($openAIDetails.properties.encryption.keyVaultProperties.keyUri) {
+                $tempOpenAIResults += "Good: Keys are stored in Azure Key Vault for OpenAI resource $($openAIResource.name)"
+                $openAIControlArray[4].Result = 100
+            }
+            else {
+                $tempOpenAIResults += "Bad: Keys are NOT stored in Azure Key Vault for OpenAI resource $($openAIResource.name)"
+                $openAIControlArray[4].Result = 0
+            }
+
+            # Use Entra ID for authentication
+            if ($openAIDetails.identity.type -match "SystemAssigned" -or $openAIDetails.identity.type -match "UserAssigned") {
+                $tempOpenAIResults += "Good: Entra ID is used for authentication for OpenAI resource $($openAIResource.name)"
+                $openAIControlArray[5].Result = 100
+            }
+            else {
+                $tempOpenAIResults += "Bad: Entra ID is NOT used for authentication for OpenAI resource $($openAIResource.name)"
+                $openAIControlArray[5].Result = 0
+            }
+
             # Calculate the weighted average for the Azure OpenAI resource
             $openAIScore = $openAIControlArray | ForEach-Object { $_.Result * $_.Weight } | Measure-Object -Sum | Select-Object -ExpandProperty Sum
             $openAIAvgScore = $openAIScore / $openAITotalWeight
@@ -2996,6 +3351,9 @@ foreach ($sub in $AllSubscriptions) {
         "Track database events with Azure SQL Database Auditing;Security;80"
         "Configure a user-assigned managed identity for your SQL Database;Security;80"
         "Disable SQL-based authentication for your SQL Database;Security;90"
+        "Configure Always Encrypted and enable Secure Enclaves;Security;90"
+        "Use Azure Backup to protect your SQL Database;Reliability;80"
+        "Configure Automatic Tuning for your SQL Database;Performance Efficiency;80"
     )
 
     $SQLDbResults = @()
@@ -3178,6 +3536,40 @@ foreach ($sub in $AllSubscriptions) {
                 $tempSQLDbResults += "Good: SQL-based authentication is disabled for SQL Database $($sqlDb.name)"
             }
 
+            # Configure Always Encrypted and enable Secure Enclaves
+            if ($sqlDb.encryptionProtector.type -match "AzureKeyVault" -and $sqlDb.encryptionProtector.status -match "Enabled") {
+                $tempSQLDbResults += "Good: Always Encrypted is configured and Secure Enclaves are enabled for SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[12].Result = 100
+            }
+            else {
+                $tempSQLDbResults += "Bad: Always Encrypted is NOT configured or Secure Enclaves are NOT enabled for SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[12].Result = 0
+            }
+
+            # Use Azure Backup to protect your SQL Database
+            $uri = "https://management.azure.com$($sqlDb.id)/backupShortTermRetentionPolicies/default?api-version=2021-05-01-preview"
+            $backupPolicy = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10 -ErrorAction SilentlyContinue)
+            if ($backupPolicy.retentionDays -gt 0) {
+                $tempSQLDbResults += "Good: Azure Backup is used to protect SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[13].Result = 100
+            }
+            else {
+                $tempSQLDbResults += "Bad: Azure Backup is NOT used to protect SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[13].Result = 0
+            }
+
+            # Configure Automatic Tuning for your SQL Database
+            $uri = "https://management.azure.com$($sqlDb.id)/automaticTuning?api-version=2021-05-01-preview"
+            $autoTuning = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10 -ErrorAction SilentlyContinue)
+            if ($autoTuning.options -match "Auto") {
+                $tempSQLDbResults += "Good: Automatic Tuning is configured for SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[14].Result = 100
+            }
+            else {
+                $tempSQLDbResults += "Bad: Automatic Tuning is NOT configured for SQL Database $($sqlDb.name)"
+                $sqlDbControlArray[14].Result = 0
+            }
+
             # Calculate total weight to calculate weighted average
             $sqlDbTotalWeight = 0
             foreach ($control in $sqlDbControlArray) {
@@ -3229,8 +3621,7 @@ foreach ($sub in $AllSubscriptions) {
     $uri = "https://management.azure.com/subscriptions/$($sub.id)/providers/Microsoft.Sql/managedInstances?api-version=2021-05-01-preview"
     $SQLManagedInstances += ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10).value
     if (!$?) {
-        Write-Error "Unable to retrieve SQL Managed Instances for subscription $($sub.name)." -
-        ErrorAction Continue
+        Write-Error "Unable to retrieve SQL Managed Instances for subscription $($sub.name)." -ErrorAction Continue
     }
 
     # Define controls for SQL Managed Instance
@@ -3242,6 +3633,7 @@ foreach ($sub in $AllSubscriptions) {
         "Disable public network access to your SQL Managed Instance;Security;90"
         "Use Advanced Threat Protection for your SQL Managed Instance;Security;90"
         "Disable SQL-based authentication for your SQL Managed Instance;Security;90"
+        "Use Azure Backup to protect your SQL Managed Instance databases;Reliability;80"
     )
 
     $SQLMiResults = @()
@@ -3362,6 +3754,18 @@ foreach ($sub in $AllSubscriptions) {
             else {
                 $tempSQLMiResults += "Bad: SQL-based authentication is enabled for SQL Managed Instance $($sqlMi.name)"
                 $sqlMiControlArray[6].Result = 0
+            }
+
+            # Use Azure Backup to protect your SQL Managed Instance databases
+            $uri = "https://management.azure.com$($sqlMi.id)/backupShortTermRetentionPolicies/default?api-version=2021-05-01-preview"
+            $backupPolicy = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10 -ErrorAction SilentlyContinue)
+            if ($backupPolicy.retentionDays -gt 0) {
+                $tempSQLMiResults += "Good: Azure Backup is used to protect SQL Managed Instance $($sqlMi.name) databases"
+                $sqlMiControlArray[7].Result = 100
+            }
+            else {
+                $tempSQLMiResults += "Bad: Azure Backup is NOT used to protect SQL Managed Instance $($sqlMi.name) databases"
+                $sqlMiControlArray[7].Result = 0
             }
 
             # Calculate total weight to calculate weighted average
@@ -3892,6 +4296,10 @@ foreach ($sub in $AllSubscriptions) {
         "Ensure that Standard Load Balancer is zone-redundant;Reliability;90"
         "Ensure that the backend pool contains at least two instances;Reliability;90"
         "Use NAT Gateway instead of outbound rules for production workloads;Reliability;90"
+        "Configure Health Probes for Load Balancer;Reliability;90"
+        "Configure IP addresses to be zone-redundant;Reliability;90"
+        "Configure the front-end IP address to a private IP in a virtual network;Security;90"
+        "Use Azure DDos Protection for Load Balancer;Security;90"
     )
 
     $LoadBalancerResults = @()
@@ -3980,6 +4388,46 @@ foreach ($sub in $AllSubscriptions) {
             else {
                 $tempLoadBalancerResults += "Bad: NAT Gateway is NOT used instead of outbound rules for production workloads for Load Balancer $($loadBalancer.name)"
                 $loadBalancerControlArray[3].Result = 0
+            }
+
+            # Configure Health Probes for Load Balancer
+            if ($loadBalancer.properties.probes) {
+                $tempLoadBalancerResults += "Good: Health Probes are configured for Load Balancer $($loadBalancer.name)"
+                $loadBalancerControlArray[4].Result = 100
+            }
+            else {
+                $tempLoadBalancerResults += "Bad: Health Probes are NOT configured for Load Balancer $($loadBalancer.name)"
+                $loadBalancerControlArray[4].Result = 0
+            }
+
+            # Configure IP addresses to be zone-redundant
+            if ($loadBalancer.properties.frontendIPConfigurations.properties.zones) {
+                $tempLoadBalancerResults += "Good: IP addresses are configured to be zone-redundant for Load Balancer $($loadBalancer.name)"
+                $loadBalancerControlArray[5].Result = 100
+            }
+            else {
+                $tempLoadBalancerResults += "Bad: IP addresses are NOT configured to be zone-redundant for Load Balancer $($loadBalancer.name)"
+                $loadBalancerControlArray[5].Result = 0
+            }
+
+            # Configure the front-end IP address to a private IP in a virtual network
+            if ($loadBalancer.properties.frontendIPConfigurations.properties.privateIPAddress) {
+                $tempLoadBalancerResults += "Good: Front-end IP address is configured to a private IP in a virtual network for Load Balancer $($loadBalancer.name)"
+                $loadBalancerControlArray[6].Result = 100
+            }
+            else {
+                $tempLoadBalancerResults += "Bad: Front-end IP address is NOT configured to a private IP in a virtual network for Load Balancer $($loadBalancer.name)"
+                $loadBalancerControlArray[6].Result = 0
+            }
+
+            # Use Azure DDos Protection for Load Balancer
+            if ($loadBalancer.properties.protectionPolicy -match "AzureDDoS") {
+                $tempLoadBalancerResults += "Good: Azure DDos Protection is used for Load Balancer $($loadBalancer.name)"
+                $loadBalancerControlArray[7].Result = 100
+            }
+            else {
+                $tempLoadBalancerResults += "Bad: Azure DDos Protection is NOT used for Load Balancer $($loadBalancer.name)"
+                $loadBalancerControlArray[7].Result = 0
             }
 
             # Calculate total weight to calculate weighted average
@@ -4244,6 +4692,7 @@ foreach ($sub in $AllSubscriptions) {
         "Use Entra ID instead of API keys for workspace API access;Security;90"
         "Set access control mode to Use Resource or Workspace Permissions;Security;90"
         "Configure Data Retention and archiving;Cost Optimization;90"
+        "Separate workspaces from workloads;Security;90"
     )
 
     $LogAnalyticsResults = @()
@@ -4372,6 +4821,16 @@ foreach ($sub in $AllSubscriptions) {
             else {
                 $tempLogAnalyticsResults += "Bad: Data Retention and archiving is NOT configured for Log Analytics $($logAnalytics.name)"
                 $logAnalyticsControlArray[7].Result = 0
+            }
+
+            # Separate workspaces from workloads
+            if ($logAnalytics.properties.features.separateWorkspacesFromWorkloads -match "True") {
+                $tempLogAnalyticsResults += "Good: Workspaces are separated from workloads for Log Analytics $($logAnalytics.name)"
+                $logAnalyticsControlArray[8].Result = 100
+            }
+            else {
+                $tempLogAnalyticsResults += "Bad: Workspaces are NOT separated from workloads for Log Analytics $($logAnalytics.name)"
+                $logAnalyticsControlArray[8].Result = 0
             }
 
             # Calculate total weight to calculate weighted average
