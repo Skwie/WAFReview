@@ -2805,6 +2805,7 @@ foreach ($sub in $AllSubscriptions) {
         "Use Managed Identities on the cluster;Security;90"
         "Use Microsoft Entra Workload ID;Security;90"
         "Use Kubernetes Event Driven Autoscaler;Performance Efficiency;80"
+        "Enable LocalDNS for faster DNS resolution;Performance Efficiency;80"
     )
 
     $AKSResults = @()
@@ -2836,7 +2837,8 @@ foreach ($sub in $AllSubscriptions) {
             $aksControlArray = @()
 
             $uri = "https://management.azure.com$($aksCluster.id)?api-version=2021-08-01"
-            $clusterDetails = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10 -ErrorAction SilentlyContinue).properties
+            $cluster = ((New-ApiRetryCommand -uri $uri -headers $headers).Content | ConvertFrom-Json -Depth 10 -ErrorAction SilentlyContinue)
+            $clusterDetails = $cluster.properties
 
             foreach ($control in $using:AKSControls) {
                 $aksCheck = $control.Split(';')
@@ -3073,13 +3075,23 @@ foreach ($sub in $AllSubscriptions) {
             }
 
             # Use Kubernetes Event Driven Autoscaler
-            if ($clusterDetails.enableKeda -match "True") {
+            if ($cluster.ManagedClusterWorkloadAutoScalerProfileKeda -match "True") {
                 $tempAKSResults += "Good: Kubernetes Event Driven Autoscaler is used for AKS cluster $($aksCluster.name)"
                 $aksControlArray[21].Result = 100
             }
             else {
                 $tempAKSResults += "Bad: Kubernetes Event Driven Autoscaler is NOT used for AKS cluster $($aksCluster.name)"
                 $aksControlArray[21].Result = 0
+            }
+
+            # Enable LocalDNS for faster DNS resolution
+            if ($cluster.localDnsState -match "Enabled") {
+                $tempAKSResults += "Good: LocalDNS is enabled for faster DNS resolution for AKS cluster $($aksCluster.name)"
+                $aksControlArray[22].Result = 100
+            }
+            else {
+                $tempAKSResults += "Informational: LocalDNS is NOT enabled for faster DNS resolution for AKS cluster $($aksCluster.name)"
+                $aksControlArray[22].Result = 80
             }
 
             # Calculate total weight to calculate weighted average
